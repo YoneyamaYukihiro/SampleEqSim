@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RootNamespace>SampleEqSim.Equipment</RootNamespace>
-    <ApplicationIcon>Resources\equipment.ico</ApplicationIcon>
+
     <StartupObject>SampleEqSim.Equipment.App</StartupObject>
   </PropertyGroup>
 
@@ -22,6 +22,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SampleEqSim.Core\SampleEqSim.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
