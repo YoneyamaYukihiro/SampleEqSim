@@ -1,40 +1,41 @@
-using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Secs4Net;
 using SampleEqSim.Core.Gem;
 using Xunit;
-using static Secs4Net.Item;
 
 namespace SampleEqSim.Tests;
 
 /// <summary>
-/// GEM メッセージハンドラーの単体テスト
-/// secs4netのPrimaryMessageReceivedを通じてメッセージを注入し、
-/// 返答の内容を検証する
+/// GEM モデルの各種機能テスト
 /// </summary>
 public class GemMessageHandlerTests
 {
     private readonly GemEquipmentModel _model;
-    private EventHandler<PrimaryMessageWrapper>? _primaryHandler;
 
     public GemMessageHandlerTests()
     {
         var secsGemMock = new Mock<ISecsGem>();
 
-        // PrimaryMessageReceivedハンドラーをキャプチャ
         secsGemMock
-            .SetupAdd(m => m.PrimaryMessageReceived += It.IsAny<EventHandler<PrimaryMessageWrapper>>())
-            .Callback<EventHandler<PrimaryMessageWrapper>>(h => _primaryHandler = h);
-        secsGemMock.SetupAdd(m => m.ConnectionChanged += It.IsAny<EventHandler<ConnectionState>>());
+            .Setup(m => m.GetPrimaryMessageAsync(It.IsAny<CancellationToken>()))
+            .Returns(EmptyAsyncEnumerable);
 
-        // SendAsyncは成功を返す
-        secsGemMock.Setup(m => m.SendAsync(It.IsAny<SecsMessage>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SecsMessage?)null);
+        secsGemMock
+            .Setup(m => m.SendAsync(It.IsAny<SecsMessage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SecsMessage?)null!);
 
         _model = new GemEquipmentModel(
             secsGemMock.Object,
             NullLogger<GemEquipmentModel>.Instance);
+    }
+
+    private static async IAsyncEnumerable<PrimaryMessageWrapper> EmptyAsyncEnumerable(
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        yield break;
     }
 
     [Fact]
@@ -49,8 +50,8 @@ public class GemMessageHandlerTests
     [Fact]
     public void GemModel_ShouldHaveDataVariables()
     {
-        Assert.True(_model.DataVariables.ContainsKey(1001)); // ProcessTemp
-        Assert.True(_model.DataVariables.ContainsKey(1002)); // ProcessPressure
+        Assert.True(_model.DataVariables.ContainsKey(1001));
+        Assert.True(_model.DataVariables.ContainsKey(1002));
     }
 
     [Fact]
@@ -83,7 +84,6 @@ public class GemMessageHandlerTests
     {
         var ec = new EquipmentConstant(1, "TestEC", "U2", (ushort)10, (ushort)0, (ushort)100);
         Assert.Equal((ushort)10, ec.CurrentValue);
-
         ec.CurrentValue = (ushort)50;
         Assert.Equal((ushort)50, ec.CurrentValue);
     }
@@ -117,5 +117,32 @@ public class GemMessageHandlerTests
         });
         Assert.Single(vla.Limits);
         Assert.Equal(101u, vla.VariableId);
+    }
+
+    [Fact]
+    public void ProcessingState_AllTransitions_ShouldWork()
+    {
+        var states = new[]
+        {
+            ProcessingState.Idle,
+            ProcessingState.Setup,
+            ProcessingState.Ready,
+            ProcessingState.Executing,
+            ProcessingState.Pause,
+            ProcessingState.Idle,
+        };
+
+        foreach (var state in states)
+        {
+            _model.SetProcessingState(state);
+            Assert.Equal(state, _model.ProcessingState);
+        }
+    }
+
+    [Fact]
+    public void ModelName_ShouldBeSettable()
+    {
+        _model.ModelName = "TestEquipment";
+        Assert.Equal("TestEquipment", _model.ModelName);
     }
 }

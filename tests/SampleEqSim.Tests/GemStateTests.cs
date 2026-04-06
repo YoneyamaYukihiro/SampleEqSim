@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Secs4Net;
@@ -12,19 +12,33 @@ namespace SampleEqSim.Tests;
 /// </summary>
 public class GemStateTests
 {
-    private readonly Mock<ISecsGem> _secsGemMock;
     private readonly GemEquipmentModel _model;
 
     public GemStateTests()
     {
-        _secsGemMock = new Mock<ISecsGem>();
-        // ConnectionChanged と PrimaryMessageReceived のイベント登録を設定
-        _secsGemMock.SetupAdd(m => m.ConnectionChanged += It.IsAny<EventHandler<ConnectionState>>());
-        _secsGemMock.SetupAdd(m => m.PrimaryMessageReceived += It.IsAny<EventHandler<PrimaryMessageWrapper>>());
+        var secsGemMock = new Mock<ISecsGem>();
+
+        // GetPrimaryMessageAsync は空のストリームを返す
+        secsGemMock
+            .Setup(m => m.GetPrimaryMessageAsync(It.IsAny<CancellationToken>()))
+            .Returns(EmptyAsyncEnumerable);
+
+        // SendAsync は null を返す (返信なしメッセージ用)
+        secsGemMock
+            .Setup(m => m.SendAsync(It.IsAny<SecsMessage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SecsMessage?)null!);
 
         _model = new GemEquipmentModel(
-            _secsGemMock.Object,
+            secsGemMock.Object,
             NullLogger<GemEquipmentModel>.Instance);
+    }
+
+    // 空の IAsyncEnumerable ヘルパー
+    private static async IAsyncEnumerable<PrimaryMessageWrapper> EmptyAsyncEnumerable(
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        yield break;
     }
 
     [Fact]
@@ -76,42 +90,38 @@ public class GemStateTests
     [Fact]
     public void EquipmentConstants_ShouldContainT7()
     {
-        Assert.True(_model.EquipmentConstants.ContainsKey(1)); // EstablishCommunicationsTimeout
-        var ec = _model.EquipmentConstants[1];
-        Assert.Equal("EstablishCommunicationsTimeout", ec.ConstantName);
+        Assert.True(_model.EquipmentConstants.ContainsKey(1));
+        Assert.Equal("EstablishCommunicationsTimeout", _model.EquipmentConstants[1].ConstantName);
     }
 
     [Fact]
     public void CollectionEvents_ShouldBeInitialized()
     {
-        Assert.True(_model.CollectionEvents.ContainsKey(1));   // EquipmentOffline
-        Assert.True(_model.CollectionEvents.ContainsKey(101)); // ProcessStarted
-        Assert.True(_model.CollectionEvents.ContainsKey(102)); // ProcessCompleted
+        Assert.True(_model.CollectionEvents.ContainsKey(1));
+        Assert.True(_model.CollectionEvents.ContainsKey(101));
+        Assert.True(_model.CollectionEvents.ContainsKey(102));
     }
 
     [Fact]
     public void StatusVariable_ClockTime_ShouldReturnCurrentTime()
     {
-        var sv = _model.StatusVariables[1];
-        var value = sv.GetValue()?.ToString();
+        var value = _model.StatusVariables[1].GetValue()?.ToString();
         Assert.NotNull(value);
-        Assert.Equal(14, value.Length); // yyyyMMddHHmmss
+        Assert.Equal(14, value!.Length); // yyyyMMddHHmmss
     }
 
     [Fact]
     public void SetTemperature_ShouldUpdateStatusVariable()
     {
         _model.SetTemperature(150.0f);
-        var sv = _model.StatusVariables[101];
-        var value = sv.GetValue();
-        Assert.Equal(150.0f, (float)value);
+        var value = (float)_model.StatusVariables[101].GetValue();
+        Assert.Equal(150.0f, value);
     }
 
     [Fact]
     public void DefineReport_ShouldStoreReportDefinition()
     {
-        var rpt = new ReportDefinition(1, new[] { 101u, 102u, 103u });
-        _model.Reports[1] = rpt;
+        _model.Reports[1] = new ReportDefinition(1, new[] { 101u, 102u, 103u });
 
         Assert.True(_model.Reports.ContainsKey(1));
         Assert.Equal(3, _model.Reports[1].VariableIds.Count);
@@ -139,7 +149,7 @@ public class GemStateTests
     [Fact]
     public async Task SetAlarm_WhenNotCommunicating_ShouldNotThrow()
     {
-        // 通信していない場合はS5F1を送信しないことを確認
+        // 通信していない場合は S5F1 を送信せず IsSet だけ変わることを確認
         var ex = await Record.ExceptionAsync(() => _model.SetAlarmAsync(1, true));
         Assert.Null(ex);
         Assert.True(_model.Alarms[1].IsSet);

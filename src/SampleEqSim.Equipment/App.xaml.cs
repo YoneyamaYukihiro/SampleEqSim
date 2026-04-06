@@ -28,20 +28,20 @@ public partial class App : Application
                 // SECS/GEM (Passive = Equipment side)
                 services.AddSecs4Net<DeviceLogger>(context.Configuration);
 
-                // GEM Model
+                // GemEquipmentModel: シングルトン + IHostedService として両方登録
                 services.AddSingleton<GemEquipmentModel>(sp =>
                 {
                     var secsGem = sp.GetRequiredService<ISecsGem>();
-                    var logger = sp.GetRequiredService<ILogger<GemEquipmentModel>>();
-                    var config = sp.GetRequiredService<IConfiguration>();
-
-                    var model = new GemEquipmentModel(secsGem, logger)
+                    var logger  = sp.GetRequiredService<ILogger<GemEquipmentModel>>();
+                    var config  = sp.GetRequiredService<IConfiguration>();
+                    return new GemEquipmentModel(secsGem, logger)
                     {
                         ModelName = config["Equipment:ModelName"] ?? "SampleEquipment",
-                        SoftRev = config["Equipment:SoftRev"] ?? "1.0.0",
+                        SoftRev   = config["Equipment:SoftRev"]   ?? "1.0.0",
                     };
-                    return model;
                 });
+                // 同インスタンスを IHostedService として登録 (メッセージループ起動)
+                services.AddHostedService(sp => sp.GetRequiredService<GemEquipmentModel>());
 
                 // ViewModel & View
                 services.AddSingleton<EquipmentViewModel>();

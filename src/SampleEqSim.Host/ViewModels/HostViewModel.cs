@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Secs4Net;
+using SampleEqSim.Host.Services;
 using static Secs4Net.Item;
 
 namespace SampleEqSim.Host.ViewModels;
@@ -20,8 +21,6 @@ public partial class HostViewModel : ObservableObject
     [ObservableProperty] private string _equipmentModel = "-";
     [ObservableProperty] private string _equipmentSoftRev = "-";
     [ObservableProperty] private string _equipmentDateTime = "-";
-    [ObservableProperty] private string _equipmentControlState = "-";
-    [ObservableProperty] private string _equipmentProcState = "-";
 
     // ── コマンド入力 ──────────────────────────────────────────────
     [ObservableProperty] private string _hostCommandText = "START";
@@ -34,7 +33,7 @@ public partial class HostViewModel : ObservableObject
     public ObservableCollection<LogEntry> MessageLog { get; } = new();
     private const int MaxLogLines = 2000;
 
-    // ── 受信イベントログ ──────────────────────────────────────────
+    // ── イベントログ ──────────────────────────────────────────────
     public ObservableCollection<string> EventLog { get; } = new();
 
     // ── 時刻 ──────────────────────────────────────────────────────
@@ -42,12 +41,15 @@ public partial class HostViewModel : ObservableObject
 
     private readonly DispatcherTimer _clockTimer;
 
-    public HostViewModel(ISecsGem secsGem)
+    public HostViewModel(ISecsGem secsGem, HostGemService hostGemService)
     {
         _secsGem = secsGem;
 
-        _secsGem.ConnectionChanged += OnConnectionChanged;
-        _secsGem.PrimaryMessageReceived += OnPrimaryMessageReceived;
+        // HostGemService 経由でイベント購読
+        hostGemService.ConnectionChanged += (_, state) =>
+            App.Current.Dispatcher.Invoke(() => OnConnectionChanged(state));
+
+        hostGemService.PrimaryMessageReceived += OnPrimaryMessageReceivedAsync;
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clockTimer.Tick += (_, _) => CurrentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -57,46 +59,40 @@ public partial class HostViewModel : ObservableObject
     // ─────────────────────────────────────────────────────────────
     // 接続状態変化
     // ─────────────────────────────────────────────────────────────
-    private void OnConnectionChanged(object? sender, ConnectionState state)
+    private void OnConnectionChanged(ConnectionState state)
     {
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        ConnectionStateText = state.ToString().ToUpperInvariant();
+        IsConnected = state is ConnectionState.Connected or ConnectionState.Selected;
+        ConnectionLedBrush = state switch
         {
-            ConnectionStateText = state.ToString().ToUpper();
-            IsConnected = state == ConnectionState.Connected;
-            ConnectionLedBrush = state switch
-            {
-                ConnectionState.Connected => "LedGreen",
-                ConnectionState.Retry => "LedYellow",
-                _ => "LedGray",
-            };
-            AddLog($"[HSMS] 接続状態変化: {state}", LogLevel.System);
-        });
+            ConnectionState.Connected or ConnectionState.Selected => "LedGreen",
+            ConnectionState.Connecting => "LedYellow",
+            _ => "LedGray",
+        };
+        AddLog($"[HSMS] 接続状態変化: {state}", MsgLevel.System);
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 受信メッセージ処理 (装置からのプライマリメッセージ)
+    // 受信メッセージ処理 (装置からの Primary)
     // ─────────────────────────────────────────────────────────────
-    private async void OnPrimaryMessageReceived(object? sender, PrimaryMessageWrapper e)
+    private async Task OnPrimaryMessageReceivedAsync(PrimaryMessageWrapper e)
     {
         var msg = e.PrimaryMessage;
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            AddLog($"RCV << S{msg.S}F{msg.F} {msg.Name}", LogLevel.Receive));
+        App.Current.Dispatcher.Invoke(() =>
+            AddLog($"RCV << S{msg.S}F{msg.F} {msg.Name}", MsgLevel.Receive));
 
         SecsMessage? reply = (msg.S, msg.F) switch
         {
-            // S5F1: Alarm Report
-            (5, 1) => HandleS5F1(msg),
-            // S6F11: Event Report
+            (5, 1)  => HandleS5F1(msg),
             (6, 11) => HandleS6F11(msg),
-            // S10F1: Terminal Request
             (10, 1) => HandleS10F1(msg),
-            _ => null
+            _       => null,
         };
 
         if (msg.ReplyExpected && reply != null)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                AddLog($"SND >> S{reply.S}F{reply.F} {reply.Name}", LogLevel.Send));
+            App.Current.Dispatcher.Invoke(() =>
+                AddLog($"SND >> S{reply.S}F{reply.F} {reply.Name}", MsgLevel.Send));
             await e.ReplyAsync(reply);
         }
     }
@@ -109,11 +105,12 @@ public partial class HostViewModel : ObservableObject
             var alid = msg.SecsItem[1].FirstValue<uint>();
             var alTx = msg.SecsItem[2].GetString();
             var isSet = (alcd & 0x80) != 0;
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            App.Current.Dispatcher.Invoke(() =>
             {
                 var ev = $"[ALARM {(isSet ? "SET" : "CLR")}] ALID={alid} {alTx}";
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {ev}");
-                AddLog(ev, isSet ? LogLevel.Alarm : LogLevel.System);
+                AddLog(ev, isSet ? MsgLevel.Alarm : MsgLevel.System);
+                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
             });
         }
         return new SecsMessage(5, 2, "S5F2") { SecsItem = B(0) };
@@ -124,7 +121,7 @@ public partial class HostViewModel : ObservableObject
         if (msg.SecsItem?.Count >= 2)
         {
             var ceid = msg.SecsItem[1].FirstValue<uint>();
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            App.Current.Dispatcher.Invoke(() =>
             {
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] [EVENT] CEID={ceid}");
                 while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
@@ -138,14 +135,17 @@ public partial class HostViewModel : ObservableObject
         if (msg.SecsItem?.Count >= 2)
         {
             var text = msg.SecsItem[1].GetString();
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] [TERMINAL] {text}"));
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] [TERMINAL] {text}");
+                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+            });
         }
         return new SecsMessage(10, 2, "S10F2") { SecsItem = B(0) };
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F1 Are You There
+    // S1F1 Are You There
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SendS1F1()
@@ -154,14 +154,14 @@ public partial class HostViewModel : ObservableObject
         {
             if (reply?.SecsItem?.Count >= 2)
             {
-                EquipmentModel = reply.SecsItem[0].GetString();
+                EquipmentModel   = reply.SecsItem[0].GetString();
                 EquipmentSoftRev = reply.SecsItem[1].GetString();
             }
         });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F13 Establish Communications
+    // S1F13 Establish Communications
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SendS1F13()
@@ -170,16 +170,13 @@ public partial class HostViewModel : ObservableObject
             new SecsMessage(1, 13, "S1F13") { SecsItem = L(A("HOST"), A("1.0")) },
             reply =>
             {
-                if (reply?.SecsItem?.Count >= 2)
-                {
-                    var commack = reply.SecsItem[0].FirstValue<byte>();
-                    AddLog($"  COMMACK={commack} ({(commack == 0 ? "Accepted" : "Rejected")})", LogLevel.System);
-                }
+                var commack = reply?.SecsItem?[0].FirstValue<byte>() ?? 0xFF;
+                AddLog($"  COMMACK={commack} ({(commack == 0 ? "Accepted" : "Rejected")})", MsgLevel.System);
             });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F15 Request OFF-LINE
+    // S1F15 Request OFF-LINE
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SendS1F15()
@@ -187,12 +184,12 @@ public partial class HostViewModel : ObservableObject
         await SendAndLog(new SecsMessage(1, 15, "S1F15"), reply =>
         {
             var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
-            AddLog($"  OFLACK={ack}", LogLevel.System);
+            AddLog($"  OFLACK={ack}", MsgLevel.System);
         });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F17 Request ON-LINE
+    // S1F17 Request ON-LINE
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SendS1F17()
@@ -200,12 +197,12 @@ public partial class HostViewModel : ObservableObject
         await SendAndLog(new SecsMessage(1, 17, "S1F17"), reply =>
         {
             var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
-            AddLog($"  ONLACK={ack} ({(ack == 0 ? "OK" : ack == 2 ? "Already Online" : "Refused")})", LogLevel.System);
+            AddLog($"  ONLACK={ack} ({(ack == 0 ? "OK" : ack == 2 ? "Already Online" : "Refused")})", MsgLevel.System);
         });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F17 Date and Time Request
+    // S2F17 Date and Time Request
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SendS2F17()
@@ -217,164 +214,163 @@ public partial class HostViewModel : ObservableObject
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F3 Status Variables Request
+    // S1F3 Status Variables Request
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task RequestStatusVariables()
     {
-        var ids = RequestSvIds.Split(',')
+        var ids = RequestSvIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(s => s.Trim())
             .Where(s => uint.TryParse(s, out _))
             .Select(uint.Parse)
             .ToList();
 
-        var svItems = ids.Select(id => (Item)U4(id)).ToList();
-        var msg = new SecsMessage(1, 3, "S1F3") { SecsItem = L(svItems) };
+        var msg = new SecsMessage(1, 3, "S1F3")
+        {
+            SecsItem = L(ids.Select(id => (Item)U4(id)))
+        };
 
         await SendAndLog(msg, reply =>
         {
             if (reply?.SecsItem != null)
             {
-                var results = reply.SecsItem.Select((item, i) =>
-                    $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {item.ToSml()}").ToList();
-                SvDataResult = string.Join("\n", results);
+                var lines = reply.SecsItem
+                    .Select((item, i) => $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {item.ToSml()}")
+                    .ToList();
+                SvDataResult = string.Join("\n", lines);
             }
         });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S5F5 List Alarms
+    // S5F5 List Alarms
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task ListAlarms()
     {
         await SendAndLog(new SecsMessage(5, 5, "S5F5") { SecsItem = L() }, reply =>
         {
-            if (reply?.SecsItem != null)
+            if (reply?.SecsItem == null) return;
+            foreach (var alarmItem in reply.SecsItem)
             {
-                foreach (var alarmItem in reply.SecsItem)
-                {
-                    if (alarmItem.Count >= 3)
-                    {
-                        var alid = alarmItem[1].FirstValue<uint>();
-                        var text = alarmItem[2].GetString();
-                        AddLog($"  ALARM ALID={alid}: {text}", LogLevel.System);
-                    }
-                }
+                if (alarmItem.Count >= 3)
+                    AddLog($"  ALARM ALID={alarmItem[1].FirstValue<uint>()}: {alarmItem[2].GetString()}",
+                           MsgLevel.System);
             }
         });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F41 Host Command
+    // S2F41 Host Command
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task SendHostCommand()
     {
         if (string.IsNullOrWhiteSpace(HostCommandText)) return;
-        var msg = new SecsMessage(2, 41, "S2F41")
-        {
-            SecsItem = L(A(HostCommandText.ToUpper()), L())
-        };
-        await SendAndLog(msg, reply =>
-        {
-            if (reply?.SecsItem?.Count >= 1)
+        await SendAndLog(
+            new SecsMessage(2, 41, "S2F41")
             {
-                var hcack = reply.SecsItem[0].FirstValue<byte>();
-                AddLog($"  HCACK={hcack} ({(hcack == 0 ? "ACK" : "NACK")})", LogLevel.System);
-            }
-        });
+                SecsItem = L(A(HostCommandText.ToUpperInvariant()), L())
+            },
+            reply =>
+            {
+                var hcack = reply?.SecsItem?.Count >= 1
+                    ? reply.SecsItem[0].FirstValue<byte>() : (byte)0xFF;
+                AddLog($"  HCACK={hcack} ({(hcack == 0 ? "ACK" : "NACK")})", MsgLevel.System);
+            });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F33 Define Report
+    // S2F33 Define Report
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task DefineReport()
     {
-        // RPTID=1: SV 101 (Temperature), 102 (Pressure), 103 (LotId)
-        var msg = new SecsMessage(2, 33, "S2F33")
-        {
-            SecsItem = L(
-                U4(1),     // DATAID
-                L(
-                    L(U4(1), L(U4(101u), U4(102u), U4(103u)))))  // RPTID=1, VIDs
-        };
-        await SendAndLog(msg, reply =>
-        {
-            var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
-            AddLog($"  DRACK={ack} ({(ack == 0 ? "ACK" : "NACK")})", LogLevel.System);
-        });
+        // RPTID=1: SV 101(Temperature), 102(Pressure), 103(LotId)
+        await SendAndLog(
+            new SecsMessage(2, 33, "S2F33")
+            {
+                SecsItem = L(
+                    U4(1),
+                    L(L(U4(1u), L(U4(101u), U4(102u), U4(103u)))))
+            },
+            reply =>
+            {
+                var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
+                AddLog($"  DRACK={ack} ({(ack == 0 ? "ACK" : "NACK")})", MsgLevel.System);
+            });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F35 Link Event Report
+    // S2F35 Link Event Report
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task LinkEventReport()
     {
-        // CEID=101 (ProcessStarted) → RPTID=1
-        var msg = new SecsMessage(2, 35, "S2F35")
-        {
-            SecsItem = L(
-                U4(1),   // DATAID
-                L(
-                    L(U4(101u), L(U4(1u))),   // CEID=101 → RPTID=1
-                    L(U4(102u), L(U4(1u)))))  // CEID=102 → RPTID=1
-        };
-        await SendAndLog(msg, reply =>
-        {
-            var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
-            AddLog($"  LRACK={ack} ({(ack == 0 ? "ACK" : "NACK")})", LogLevel.System);
-        });
+        // CEID=101,102 → RPTID=1
+        await SendAndLog(
+            new SecsMessage(2, 35, "S2F35")
+            {
+                SecsItem = L(
+                    U4(1),
+                    L(
+                        L(U4(101u), L(U4(1u))),
+                        L(U4(102u), L(U4(1u)))))
+            },
+            reply =>
+            {
+                var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
+                AddLog($"  LRACK={ack} ({(ack == 0 ? "ACK" : "NACK")})", MsgLevel.System);
+            });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F37 Enable/Disable Events (全有効)
+    // S2F37 Enable All Events
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
     private async Task EnableAllEvents()
     {
-        var msg = new SecsMessage(2, 37, "S2F37")
-        {
-            SecsItem = L(Boolean(true), L()) // 全CEID有効
-        };
-        await SendAndLog(msg, reply =>
-        {
-            var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
-            AddLog($"  ERACK={ack} ({(ack == 0 ? "ACK" : "NACK")})", LogLevel.System);
-        });
+        await SendAndLog(
+            new SecsMessage(2, 37, "S2F37")
+            {
+                SecsItem = L(Boolean(true), L())
+            },
+            reply =>
+            {
+                var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
+                AddLog($"  ERACK={ack} ({(ack == 0 ? "ACK" : "NACK")})", MsgLevel.System);
+            });
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ヘルパー: メッセージ送信 + ログ
+    // ヘルパー: 送信 + ログ
     // ─────────────────────────────────────────────────────────────
     private async Task SendAndLog(SecsMessage msg, Action<SecsMessage?>? onReply = null)
     {
         if (!IsConnected)
         {
-            AddLog("[ERR] 未接続です", LogLevel.Error);
+            AddLog("[ERR] 未接続です", MsgLevel.Error);
             return;
         }
         try
         {
-            AddLog($"SND >> S{msg.S}F{msg.F} {msg.Name}", LogLevel.Send);
+            AddLog($"SND >> S{msg.S}F{msg.F} {msg.Name}", MsgLevel.Send);
             var reply = await _secsGem.SendAsync(msg);
             if (reply != null)
-                AddLog($"RCV << S{reply.S}F{reply.F} {reply.Name}", LogLevel.Receive);
+                AddLog($"RCV << S{reply.S}F{reply.F} {reply.Name}", MsgLevel.Receive);
             onReply?.Invoke(reply);
         }
         catch (SecsException ex)
         {
-            AddLog($"[ERR] S{msg.S}F{msg.F}: {ex.Message}", LogLevel.Error);
+            AddLog($"[ERR] S{msg.S}F{msg.F}: {ex.Message}", MsgLevel.Error);
         }
         catch (Exception ex)
         {
-            AddLog($"[ERR] {ex.Message}", LogLevel.Error);
+            AddLog($"[ERR] {ex.Message}", MsgLevel.Error);
         }
     }
 
-    private void AddLog(string message, LogLevel level = LogLevel.System)
+    private void AddLog(string message, MsgLevel level = MsgLevel.System)
     {
         var entry = new LogEntry(DateTime.Now, message, level);
         MessageLog.Insert(0, entry);
@@ -382,40 +378,35 @@ public partial class HostViewModel : ObservableObject
             MessageLog.RemoveAt(MessageLog.Count - 1);
     }
 
-    [RelayCommand]
-    private void ClearLog() => MessageLog.Clear();
-
-    [RelayCommand]
-    private void ClearEventLog() => EventLog.Clear();
+    [RelayCommand] private void ClearLog()      => MessageLog.Clear();
+    [RelayCommand] private void ClearEventLog() => EventLog.Clear();
 }
 
 // ─────────────────────────────────────────────────────────────
 // ログエントリ
 // ─────────────────────────────────────────────────────────────
-public enum LogLevel { System, Send, Receive, Alarm, Error }
+public enum MsgLevel { System, Send, Receive, Alarm, Error }
 
 public class LogEntry
 {
-    public DateTime Time { get; }
-    public string Message { get; }
-    public LogLevel Level { get; }
-    public string TimeText => Time.ToString("HH:mm:ss.fff");
+    public DateTime Time    { get; }
+    public string   Message { get; }
+    public MsgLevel Level   { get; }
+    public string   TimeText => Time.ToString("HH:mm:ss.fff");
 
     public string ForegroundColor => Level switch
     {
-        LogLevel.Send    => "#60A5FA",  // 青
-        LogLevel.Receive => "#4ADE80",  // 緑
-        LogLevel.Alarm   => "#F87171",  // 赤
-        LogLevel.Error   => "#FB923C",  // オレンジ
-        _                => "#E2E8F0",  // 白
+        MsgLevel.Send    => "#60A5FA",
+        MsgLevel.Receive => "#4ADE80",
+        MsgLevel.Alarm   => "#F87171",
+        MsgLevel.Error   => "#FB923C",
+        _                => "#E2E8F0",
     };
 
-    public LogEntry(DateTime time, string message, LogLevel level)
+    public LogEntry(DateTime time, string message, MsgLevel level)
     {
-        Time = time;
+        Time    = time;
         Message = message;
-        Level = level;
+        Level   = level;
     }
-
-    public override string ToString() => $"[{TimeText}] {Message}";
 }

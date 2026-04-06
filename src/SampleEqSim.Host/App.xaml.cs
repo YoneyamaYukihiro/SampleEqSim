@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Secs4Net;
+using SampleEqSim.Host.Services;
 using SampleEqSim.Host.ViewModels;
 using SampleEqSim.Host.Views;
 
@@ -26,6 +27,11 @@ public partial class App : Application
             {
                 // SECS/GEM (Active = Host side)
                 services.AddSecs4Net<DeviceLogger>(context.Configuration);
+
+                // HostGemService: メッセージループ + 接続状態管理
+                // シングルトンとして登録し、IHostedService にも追加
+                services.AddSingleton<HostGemService>();
+                services.AddHostedService(sp => sp.GetRequiredService<HostGemService>());
 
                 // ViewModel & View
                 services.AddSingleton<HostViewModel>();
