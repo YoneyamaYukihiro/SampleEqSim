@@ -26,6 +26,16 @@ public partial class EquipmentViewModel : ObservableObject
     [ObservableProperty] private string _lotId = "";
     [ObservableProperty] private string _recipeId = "";
 
+    // ── レシピ ────────────────────────────────────────────────────
+    public ObservableCollection<RecipeViewModel> RecipeList { get; } = new();
+
+    // ── ポート/キャリア ───────────────────────────────────────────
+    public ObservableCollection<PortViewModel>    PortList    { get; } = new();
+    public ObservableCollection<CarrierViewModel> CarrierList { get; } = new();
+    [ObservableProperty] private string _loadCarrierId   = "CARRIER001";
+    [ObservableProperty] private string _loadPortIdStr   = "1";
+    [ObservableProperty] private string _unloadPortIdStr = "1";
+
     // ── アラーム ──────────────────────────────────────────────────
     public ObservableCollection<AlarmViewModel> AlarmList { get; } = new();
 
@@ -50,6 +60,13 @@ public partial class EquipmentViewModel : ObservableObject
         model.ProcessingStateChanged += (_, s) => App.Current.Dispatcher.Invoke(() => UpdateProcessingState(s));
         model.MessageLogged += (_, msg) => App.Current.Dispatcher.Invoke(() => AddLog(msg));
         model.AlarmStateChanged += (_, e) => App.Current.Dispatcher.Invoke(() => UpdateAlarm(e.AlarmId, e.IsSet));
+        model.ProcessProgramChanged += (_, e) => App.Current.Dispatcher.Invoke(() => UpdateRecipe(e.PpId, e.Deleted));
+        model.PortStateChanged      += (_, portId)    => App.Current.Dispatcher.Invoke(() => RefreshPort(portId));
+        model.CarrierStateChanged   += (_, carrierId) => App.Current.Dispatcher.Invoke(() => RefreshCarrier(carrierId));
+
+        // ポートの初期表示
+        foreach (var port in model.Ports.Values)
+            PortList.Add(new PortViewModel(port));
 
         // UI更新タイマー (1秒ごと)
         _uiUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -108,6 +125,47 @@ public partial class EquipmentViewModel : ObservableObject
             ProcessingState.Idle => "LedGray",
             _ => "LedGray",
         };
+    }
+
+    private void UpdateRecipe(string ppId, bool deleted)
+    {
+        if (deleted)
+        {
+            var vm = RecipeList.FirstOrDefault(r => r.PpId == ppId);
+            if (vm != null) RecipeList.Remove(vm);
+        }
+        else
+        {
+            var existing = RecipeList.FirstOrDefault(r => r.PpId == ppId);
+            if (existing != null)
+                existing.Refresh(_model.ProcessPrograms[ppId]);
+            else
+                RecipeList.Add(new RecipeViewModel(_model.ProcessPrograms[ppId]));
+        }
+    }
+
+    private void RefreshPort(uint portId)
+    {
+        if (!_model.Ports.TryGetValue(portId, out var port)) return;
+        var vm = PortList.FirstOrDefault(p => p.PortId == portId);
+        if (vm != null) vm.Refresh(port);
+        else PortList.Add(new PortViewModel(port));
+    }
+
+    private void RefreshCarrier(string carrierId)
+    {
+        if (_model.Carriers.TryGetValue(carrierId, out var carrier))
+        {
+            var vm = CarrierList.FirstOrDefault(c => c.CarrierId == carrierId);
+            if (vm != null) vm.Refresh(carrier);
+            else CarrierList.Add(new CarrierViewModel(carrier));
+        }
+        else
+        {
+            // アンロード済み → リストから削除
+            var vm = CarrierList.FirstOrDefault(c => c.CarrierId == carrierId);
+            if (vm != null) CarrierList.Remove(vm);
+        }
     }
 
     private void UpdateAlarm(uint alarmId, bool isSet)
@@ -195,6 +253,23 @@ public partial class EquipmentViewModel : ObservableObject
 
     [RelayCommand]
     private void ClearLog() => MessageLog.Clear();
+
+    // ─────────────────────────────────────────────────────────────
+    // コマンド: キャリアロード/アンロード
+    // ─────────────────────────────────────────────────────────────
+    [RelayCommand]
+    private async Task LoadCarrier()
+    {
+        if (!uint.TryParse(LoadPortIdStr, out var portId) || string.IsNullOrWhiteSpace(LoadCarrierId)) return;
+        await _model.LoadCarrierAsync(portId, LoadCarrierId.Trim());
+    }
+
+    [RelayCommand]
+    private async Task UnloadCarrier()
+    {
+        if (!uint.TryParse(UnloadPortIdStr, out var portId)) return;
+        await _model.UnloadCarrierAsync(portId);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -217,5 +292,79 @@ public partial class AlarmViewModel : ObservableObject
         Category = alarm.Category;
         IsSet = alarm.IsSet;
         IsEnabled = alarm.IsEnabled;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ポートビューモデル
+// ─────────────────────────────────────────────────────────────
+public partial class PortViewModel : ObservableObject
+{
+    public uint   PortId   { get; }
+    public string PortName { get; }
+    [ObservableProperty] private string _state      = "";
+    [ObservableProperty] private string _accessMode = "";
+    [ObservableProperty] private string _carrierId  = "";
+
+    public PortViewModel(LoadPort port)
+    {
+        PortId   = port.PortId;
+        PortName = port.PortName;
+        Refresh(port);
+    }
+
+    public void Refresh(LoadPort port)
+    {
+        State      = port.State.ToString();
+        AccessMode = port.AccessMode.ToString();
+        CarrierId  = port.CarrierId ?? "";
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// キャリアビューモデル
+// ─────────────────────────────────────────────────────────────
+public partial class CarrierViewModel : ObservableObject
+{
+    public string CarrierId { get; }
+    [ObservableProperty] private uint   _portId;
+    [ObservableProperty] private string _state = "";
+
+    public CarrierViewModel(Carrier carrier)
+    {
+        CarrierId = carrier.CarrierId;
+        Refresh(carrier);
+    }
+
+    public void Refresh(Carrier carrier)
+    {
+        PortId = carrier.PortId;
+        State  = carrier.State.ToString();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// レシピビューモデル
+// ─────────────────────────────────────────────────────────────
+public partial class RecipeViewModel : ObservableObject
+{
+    public string PpId { get; }
+    [ObservableProperty] private int    _size;
+    [ObservableProperty] private string _lastModified = "";
+    [ObservableProperty] private string _bodyPreview  = "";
+
+    public RecipeViewModel(ProcessProgram pp)
+    {
+        PpId = pp.PpId;
+        Refresh(pp);
+    }
+
+    public void Refresh(ProcessProgram pp)
+    {
+        Size         = pp.Body.Length;
+        LastModified = pp.LastModified.ToString("MM/dd HH:mm:ss");
+        BodyPreview  = pp.BodyText.Length > 60
+            ? pp.BodyText[..60] + "…"
+            : pp.BodyText;
     }
 }

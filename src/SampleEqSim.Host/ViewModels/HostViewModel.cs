@@ -21,13 +21,23 @@ public partial class HostViewModel : ObservableObject
     [ObservableProperty] private string _equipmentModel = "-";
     [ObservableProperty] private string _equipmentSoftRev = "-";
     [ObservableProperty] private string _equipmentDateTime = "-";
+    [ObservableProperty] private string _equipmentControlState = "-";
+    [ObservableProperty] private string _equipmentProcState = "-";
 
     // ── コマンド入力 ──────────────────────────────────────────────
     [ObservableProperty] private string _hostCommandText = "START";
 
+    // ── レシピ ────────────────────────────────────────────────────
+    [ObservableProperty] private string _recipePpId   = "RECIPE001";
+    [ObservableProperty] private string _recipeBody   = "STEP1,TEMP=200,TIME=60\nSTEP2,TEMP=150,TIME=30";
+    [ObservableProperty] private string _recipeDirectory = "";
+
     // ── SVIDリクエスト ────────────────────────────────────────────
     [ObservableProperty] private string _requestSvIds = "101,102,103";
     [ObservableProperty] private string _svDataResult = "";
+
+    // ── ポート/キャリア情報 ───────────────────────────────────────
+    [ObservableProperty] private string _portCarrierInfo = "";
 
     // ── ログ ──────────────────────────────────────────────────────
     public ObservableCollection<LogEntry> MessageLog { get; } = new();
@@ -86,6 +96,8 @@ public partial class HostViewModel : ObservableObject
             (5, 1)  => HandleS5F1(msg),
             (6, 11) => HandleS6F11(msg),
             (10, 1) => HandleS10F1(msg),
+            (14, 9) => HandleS14F9(msg),   // CarrierIn notification
+            (14, 11)=> HandleS14F11(msg),  // CarrierOut notification
             _       => null,
         };
 
@@ -142,6 +154,41 @@ public partial class HostViewModel : ObservableObject
             });
         }
         return new SecsMessage(10, 2, false) { SecsItem = B(0) };
+    }
+
+    private SecsMessage? HandleS14F9(SecsMessage msg)
+    {
+        if (msg.SecsItem?.Count >= 3)
+        {
+            var carrierId = msg.SecsItem[0].GetString();
+            var portId    = msg.SecsItem[1].FirstValue<uint>();
+            var state     = msg.SecsItem[2].FirstValue<byte>();
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                var ev = $"[CARRIER IN] CarrierID={carrierId} Port={portId} State={state}";
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {ev}");
+                AddLog(ev, MsgLevel.System);
+                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+            });
+        }
+        return msg.ReplyExpected ? new SecsMessage(14, 10, false) { SecsItem = B(0) } : null;
+    }
+
+    private SecsMessage? HandleS14F11(SecsMessage msg)
+    {
+        if (msg.SecsItem?.Count >= 2)
+        {
+            var carrierId = msg.SecsItem[0].GetString();
+            var portId    = msg.SecsItem[1].FirstValue<uint>();
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                var ev = $"[CARRIER OUT] CarrierID={carrierId} Port={portId}";
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {ev}");
+                AddLog(ev, MsgLevel.System);
+                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+            });
+        }
+        return msg.ReplyExpected ? new SecsMessage(14, 12, false) { SecsItem = B(0) } : null;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -343,8 +390,146 @@ public partial class HostViewModel : ObservableObject
     }
 
     // ─────────────────────────────────────────────────────────────
+    // S7F1+S7F3 PP Send (Inquire → Send)
+    // ─────────────────────────────────────────────────────────────
+    [RelayCommand]
+    private async Task SendProcessProgram()
+    {
+        if (string.IsNullOrWhiteSpace(RecipePpId)) return;
+
+        // S7F1 Inquire
+        await SendAndLog(
+            new SecsMessage(7, 1, true) { SecsItem = A(RecipePpId) },
+            async reply =>
+            {
+                var ppgnt = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
+                AddLog($"  PPGNT={ppgnt} ({(ppgnt == 0 ? "Granted" : "Denied")})", MsgLevel.System);
+                if (ppgnt != 0) return;
+
+                // S7F3 Send body
+                var body = A(RecipeBody);
+                await SendAndLog(
+                    new SecsMessage(7, 3, true) { SecsItem = L(A(RecipePpId), body) },
+                    r2 =>
+                    {
+                        var ack = r2?.SecsItem?.FirstValue<byte>() ?? 0xFF;
+                        AddLog($"  PPACKED={ack} ({(ack == 0 ? "Accepted" : "Rejected")})", MsgLevel.System);
+                    });
+            });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // S7F17 PP Delete
+    // ─────────────────────────────────────────────────────────────
+    [RelayCommand]
+    private async Task DeleteProcessProgram()
+    {
+        if (string.IsNullOrWhiteSpace(RecipePpId)) return;
+        await SendAndLog(
+            new SecsMessage(7, 17, true) { SecsItem = L(A(RecipePpId)) },
+            reply =>
+            {
+                var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
+                AddLog($"  PPACKED={ack} ({(ack == 0 ? "Deleted" : "Failed")})", MsgLevel.System);
+            });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // S7F19 PP Directory
+    // ─────────────────────────────────────────────────────────────
+    [RelayCommand]
+    private async Task RequestPpDirectory()
+    {
+        await SendAndLog(
+            new SecsMessage(7, 19, true),
+            reply =>
+            {
+                if (reply?.SecsItem == null) { RecipeDirectory = "(empty)"; return; }
+                var ids = Items(reply.SecsItem).Select(i => i.GetString()).ToList();
+                RecipeDirectory = ids.Count > 0 ? string.Join(", ", ids) : "(empty)";
+                AddLog($"  PP Directory: {RecipeDirectory}", MsgLevel.System);
+            });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // S14F1 GetAttr (Port/Carrier)
+    // ─────────────────────────────────────────────────────────────
+    [RelayCommand]
+    private async Task GetPortAttr()
+    {
+        // Object type "Port", no filter, request PortID/PortState/AccessMode/CarrierID
+        await SendAndLog(
+            new SecsMessage(14, 1, true)
+            {
+                SecsItem = L(
+                    A("Port"),
+                    L(),
+                    L(A("PortID"), A("PortState"), A("AccessMode"), A("CarrierID")))
+            },
+            reply =>
+            {
+                if (reply?.SecsItem == null) { PortCarrierInfo = "(no reply)"; return; }
+                var lines = new System.Text.StringBuilder();
+                foreach (var objAttr in Items(reply.SecsItem))
+                {
+                    for (int i = 0; i < objAttr.Count; i += 2)
+                    {
+                        if (i + 1 < objAttr.Count)
+                            lines.AppendLine($"  {objAttr[i].GetString()}={objAttr[i+1].GetString()}");
+                    }
+                    lines.AppendLine("---");
+                }
+                PortCarrierInfo = lines.ToString().TrimEnd();
+                AddLog($"  Port Attrs:\n{PortCarrierInfo}", MsgLevel.System);
+            });
+    }
+
+    [RelayCommand]
+    private async Task GetCarrierAttr()
+    {
+        // Object type "Carrier", no filter, request CarrierID/PortID/CarrierState
+        await SendAndLog(
+            new SecsMessage(14, 1, true)
+            {
+                SecsItem = L(
+                    A("Carrier"),
+                    L(),
+                    L(A("CarrierID"), A("PortID"), A("CarrierState")))
+            },
+            reply =>
+            {
+                if (reply?.SecsItem == null) { PortCarrierInfo = "(no reply)"; return; }
+                var lines = new System.Text.StringBuilder();
+                foreach (var objAttr in Items(reply.SecsItem))
+                {
+                    for (int i = 0; i < objAttr.Count; i += 2)
+                    {
+                        if (i + 1 < objAttr.Count)
+                            lines.AppendLine($"  {objAttr[i].GetString()}={objAttr[i+1].GetString()}");
+                    }
+                    lines.AppendLine("---");
+                }
+                PortCarrierInfo = lines.ToString().TrimEnd();
+                AddLog($"  Carrier Attrs:\n{PortCarrierInfo}", MsgLevel.System);
+            });
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // ヘルパー: 送信 + ログ
     // ─────────────────────────────────────────────────────────────
+    private async Task SendAndLog(SecsMessage msg, Func<SecsMessage?, Task>? onReplyAsync)
+    {
+        if (!IsConnected) { AddLog("[ERR] 未接続です", MsgLevel.Error); return; }
+        try
+        {
+            AddLog($"SND >> S{msg.S}F{msg.F} ", MsgLevel.Send);
+            var reply = await _secsGem.SendAsync(msg);
+            if (reply != null) AddLog($"RCV << S{reply.S}F{reply.F} ", MsgLevel.Receive);
+            if (onReplyAsync != null) await onReplyAsync(reply);
+        }
+        catch (Exception ex) { AddLog($"[ERR] {ex.Message}", MsgLevel.Error); }
+    }
+
     private async Task SendAndLog(SecsMessage msg, Action<SecsMessage?>? onReply = null)
     {
         if (!IsConnected)

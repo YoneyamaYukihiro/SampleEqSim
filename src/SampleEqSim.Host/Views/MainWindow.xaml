@@ -84,7 +84,7 @@
         <!-- メインコンテンツ -->
         <Grid Margin="8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="270"/>
+                <ColumnDefinition Width="2*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -165,11 +165,56 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <!-- レシピ管理 (Stream 7) -->
+                    <GroupBox Header="レシピ管理 (Process Program / S7)" Margin="0,0,0,6" Padding="6">
+                        <StackPanel>
+                            <TextBlock Text="PPID:" FontSize="11"/>
+                            <TextBox Text="{Binding RecipePpId, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="4,3" FontSize="11" Margin="0,2"/>
+                            <TextBlock Text="レシピボディ:" FontSize="11" Margin="0,4,0,0"/>
+                            <TextBox Text="{Binding RecipeBody, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="4,3" FontSize="11" Margin="0,2"
+                                     AcceptsReturn="True" Height="55"
+                                     FontFamily="Consolas, MS Gothic, Meiryo"
+                                     VerticalScrollBarVisibility="Auto"/>
+                            <UniformGrid Rows="1" Columns="3" Margin="0,4,0,0">
+                                <Button Content="S7F1+F3 PP送信" Style="{StaticResource Btn}"
+                                        Command="{Binding SendProcessProgramCommand}"/>
+                                <Button Content="S7F17 PP削除"   Style="{StaticResource Btn}"
+                                        Command="{Binding DeleteProcessProgramCommand}"/>
+                                <Button Content="S7F19 一覧取得" Style="{StaticResource Btn}"
+                                        Command="{Binding RequestPpDirectoryCommand}"/>
+                            </UniformGrid>
+                            <TextBlock Text="{Binding RecipeDirectory, StringFormat='格納済: {0}'}"
+                                       FontSize="10" Foreground="#475569" Margin="0,3,0,0"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </GroupBox>
+
                     <!-- アラーム -->
                     <GroupBox Header="アラーム管理 (Stream 5)" Margin="0,0,0,6" Padding="6">
                         <StackPanel>
                             <Button Content="S5F5 List Alarms" Style="{StaticResource Btn}"
                                     Command="{Binding ListAlarmsCommand}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- ポート/キャリア管理 (Stream 14 / E87) -->
+                    <GroupBox Header="ポート/キャリア管理 (S14 / E87)" Margin="0,0,0,6" Padding="6">
+                        <StackPanel>
+                            <UniformGrid Rows="1" Columns="2" Margin="0,0,0,4">
+                                <Button Content="S14F1 ポート属性取得"   Style="{StaticResource Btn}"
+                                        Command="{Binding GetPortAttrCommand}"/>
+                                <Button Content="S14F1 キャリア属性取得" Style="{StaticResource Btn}"
+                                        Command="{Binding GetCarrierAttrCommand}"/>
+                            </UniformGrid>
+                            <TextBox Text="{Binding PortCarrierInfo, Mode=OneWay}"
+                                     IsReadOnly="True" FontFamily="Consolas, MS Gothic, Meiryo" FontSize="10"
+                                     Background="#F1F5F9" Padding="4" MinHeight="60"
+                                     TextWrapping="Wrap" Margin="0,2"
+                                     VerticalScrollBarVisibility="Auto"/>
+                            <TextBlock Text="※ キャリアIN/OUTはイベントログに表示されます"
+                                       FontSize="10" Foreground="#64748B" Margin="0,2,0,0"/>
                         </StackPanel>
                     </GroupBox>
 
@@ -180,7 +225,7 @@
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="180"/>
+                    <RowDefinition Height="130"/>
                 </Grid.RowDefinitions>
 
                 <!-- 通信ログ -->

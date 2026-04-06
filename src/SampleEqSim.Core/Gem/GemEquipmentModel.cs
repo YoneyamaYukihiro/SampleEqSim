@@ -32,6 +32,12 @@ public class GemEquipmentModel : IHostedService
     public Dictionary<uint, bool> EnabledEvents { get; } = new();
     public Dictionary<uint, TraceDefinition> TraceRequests { get; } = new();
     public Dictionary<uint, VariableLimitAttribute> VariableLimits { get; } = new();
+    /// <summary>プロセスプログラム (レシピ) ストア</summary>
+    public Dictionary<string, ProcessProgram> ProcessPrograms { get; } = new();
+    /// <summary>ロードポート (E87)</summary>
+    public Dictionary<uint, LoadPort> Ports { get; } = new();
+    /// <summary>キャリア (E87)</summary>
+    public Dictionary<string, Carrier> Carriers { get; } = new();
 
     // ─── Equipment Info ──────────────────────────────────────────
     public string ModelName { get; set; } = "SampleEquipment";
@@ -43,6 +49,12 @@ public class GemEquipmentModel : IHostedService
     public event EventHandler<ProcessingState>? ProcessingStateChanged;
     public event EventHandler<string>? MessageLogged;
     public event EventHandler<(uint AlarmId, bool IsSet)>? AlarmStateChanged;
+    /// <summary>レシピ追加/更新/削除時に発火 (PpId, deleted)</summary>
+    public event EventHandler<(string PpId, bool Deleted)>? ProcessProgramChanged;
+    /// <summary>ポート状態変化 (PortId)</summary>
+    public event EventHandler<uint>? PortStateChanged;
+    /// <summary>キャリア状態変化 (CarrierId)</summary>
+    public event EventHandler<string>? CarrierStateChanged;
 
     // ─── Properties ──────────────────────────────────────────────
     public CommunicationState CommunicationState => _communicationState;
@@ -156,9 +168,18 @@ public class GemEquipmentModel : IHostedService
         CollectionEvents[102] = new CollectionEventDefinition(102, "ProcessCompleted");
         CollectionEvents[103] = new CollectionEventDefinition(103, "LotStarted");
         CollectionEvents[104] = new CollectionEventDefinition(104, "LotCompleted");
+        CollectionEvents[201] = new CollectionEventDefinition(201, "ProcessProgramCreated");
+        CollectionEvents[202] = new CollectionEventDefinition(202, "ProcessProgramDeleted");
+        CollectionEvents[301] = new CollectionEventDefinition(301, "CarrierIn");
+        CollectionEvents[302] = new CollectionEventDefinition(302, "CarrierOut");
+        CollectionEvents[303] = new CollectionEventDefinition(303, "PortStateChange");
 
         foreach (var ceid in CollectionEvents.Keys)
             EnabledEvents[ceid] = true;
+
+        // ── Load Ports (E87) ──
+        Ports[1] = new LoadPort(1, "LP1") { State = PortState.ReadyToLoad };
+        Ports[2] = new LoadPort(2, "LP2") { State = PortState.ReadyToLoad };
 
         // ── Alarms (ALID) ──
         Alarms[1] = new AlarmDefinition(1, "LOW_AIR", "低圧縮空気検出", AlarmCategory.Fault);
@@ -405,6 +426,13 @@ public class GemEquipmentModel : IHostedService
                 (2, 41)  => HandleS2F41(msg),
                 (2, 45)  => HandleS2F45(msg),
                 (2, 47)  => HandleS2F47(msg),
+                (14, 1)  => HandleS14F1(msg),
+                (14, 3)  => HandleS14F3(msg),
+                (7, 1)   => HandleS7F1(msg),
+                (7, 3)   => HandleS7F3(msg),
+                (7, 5)   => HandleS7F5(msg),
+                (7, 17)  => HandleS7F17(msg),
+                (7, 19)  => HandleS7F19(msg),
                 (5, 3)   => HandleS5F3(msg),
                 (5, 5)   => HandleS5F5(msg),
                 (5, 7)   => HandleS5F7(msg),
@@ -869,6 +897,268 @@ public class GemEquipmentModel : IHostedService
                 Log($"[TERMINAL TID={tid}] {msg.SecsItem[i].GetString()}");
         }
         return new SecsMessage(10, 6, false) { SecsItem = B(0) };
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // ポート / キャリア 操作 (シミュレーション用 public API)
+    // ═════════════════════════════════════════════════════════════
+
+    /// <summary>キャリアをポートに搭載 (Equipment 側シミュレーション)</summary>
+    public async Task LoadCarrierAsync(uint portId, string carrierId)
+    {
+        if (!Ports.TryGetValue(portId, out var port)) return;
+        if (port.State != PortState.ReadyToLoad && port.State != PortState.InService) return;
+
+        var carrier = new Carrier(carrierId, portId);
+        Carriers[carrierId] = carrier;
+        port.CarrierId = carrierId;
+        port.State     = PortState.ReadyToUnload;
+
+        Log($"[E87] CarrierIn Port={portId} Carrier={carrierId}");
+        PortStateChanged?.Invoke(this, portId);
+        CarrierStateChanged?.Invoke(this, carrierId);
+        await SendCollectionEventAsync(301u); // CarrierIn
+
+        // 装置 → ホストへ S14F9 通知
+        if (_communicationState == CommunicationState.Communicating)
+        {
+            var notif = new SecsMessage(14, 9, true)
+            {
+                SecsItem = L(A(carrierId), U4(portId), U1((byte)carrier.State))
+            };
+            try { await _secsGem.SendAsync(notif); }
+            catch (Exception ex) { Log($"[ERR] S14F9: {ex.Message}"); }
+        }
+    }
+
+    /// <summary>キャリアをポートから取り出し (Equipment 側シミュレーション)</summary>
+    public async Task UnloadCarrierAsync(uint portId)
+    {
+        if (!Ports.TryGetValue(portId, out var port)) return;
+        var carrierId = port.CarrierId;
+        if (carrierId == null) return;
+
+        Carriers.Remove(carrierId);
+        port.CarrierId = null;
+        port.State     = PortState.ReadyToLoad;
+
+        Log($"[E87] CarrierOut Port={portId} Carrier={carrierId}");
+        PortStateChanged?.Invoke(this, portId);
+        await SendCollectionEventAsync(302u); // CarrierOut
+
+        // 装置 → ホストへ S14F11 通知
+        if (_communicationState == CommunicationState.Communicating)
+        {
+            var notif = new SecsMessage(14, 11, true)
+            {
+                SecsItem = L(A(carrierId), U4(portId))
+            };
+            try { await _secsGem.SendAsync(notif); }
+            catch (Exception ex) { Log($"[ERR] S14F11: {ex.Message}"); }
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // Stream 14: Object Services (E87 Port/Carrier)
+    // ═════════════════════════════════════════════════════════════
+
+    /// <summary>S14F1 GetAttr — ポートまたはキャリアの属性取得</summary>
+    private SecsMessage HandleS14F1(SecsMessage msg)
+    {
+        // L[A(ObjType), L[objIds...], L[attrNames...]]
+        if (msg.SecsItem == null || msg.SecsItem.Count < 1)
+            return new SecsMessage(14, 2, false) { SecsItem = L(L(), L()) };
+
+        var objType = msg.SecsItem[0].GetString().ToUpperInvariant();
+        Log($"[S14F1] GetAttr ObjType={objType}");
+
+        var objItems = new List<Item>();
+
+        if (objType == "LOADPORT")
+        {
+            var reqIds = msg.SecsItem.Count >= 2 && msg.SecsItem[1].Count > 0
+                ? GetItems(msg.SecsItem[1]).Select(i => i.FirstValue<uint>()).ToList()
+                : Ports.Keys.ToList();
+
+            foreach (var pid in reqIds)
+            {
+                if (!Ports.TryGetValue(pid, out var port)) continue;
+                objItems.Add(L(
+                    L(U4(port.PortId), A("LoadPort")),
+                    L(
+                        L(A("PortID"),         U4(port.PortId)),
+                        L(A("PortName"),       A(port.PortName)),
+                        L(A("PortState"),      U1((byte)port.State)),
+                        L(A("AccessMode"),     U1((byte)port.AccessMode)),
+                        L(A("CarrierID"),      A(port.CarrierId ?? ""))
+                    )));
+            }
+        }
+        else if (objType == "CARRIER")
+        {
+            var reqIds = msg.SecsItem.Count >= 2 && msg.SecsItem[1].Count > 0
+                ? GetItems(msg.SecsItem[1]).Select(i => i.GetString()).ToList()
+                : Carriers.Keys.ToList();
+
+            foreach (var cid in reqIds)
+            {
+                if (!Carriers.TryGetValue(cid, out var carrier)) continue;
+                objItems.Add(L(
+                    L(A(carrier.CarrierId), A("Carrier")),
+                    L(
+                        L(A("CarrierID"),    A(carrier.CarrierId)),
+                        L(A("PortID"),       U4(carrier.PortId)),
+                        L(A("CarrierState"), U1((byte)carrier.State)),
+                        L(A("SlotCount"),    U1((byte)carrier.SlotCount))
+                    )));
+            }
+        }
+
+        return new SecsMessage(14, 2, false)
+        {
+            SecsItem = L(L(objItems), L())
+        };
+    }
+
+    /// <summary>S14F3 SetAttr — ポートのアクセスモード変更</summary>
+    private SecsMessage HandleS14F3(SecsMessage msg)
+    {
+        // L[A(ObjType), L[U4(id), L[L[A(name), val]...]]]
+        byte result = 0;
+        if (msg.SecsItem?.Count >= 2)
+        {
+            var objType = msg.SecsItem[0].GetString().ToUpperInvariant();
+            var objData = msg.SecsItem[1];
+            if (objType == "LOADPORT" && objData.Count >= 2)
+            {
+                var portId = objData[0].FirstValue<uint>();
+                if (Ports.TryGetValue(portId, out var port))
+                {
+                    foreach (var attrItem in GetItems(objData[1]))
+                    {
+                        if (attrItem.Count < 2) continue;
+                        var name = attrItem[0].GetString();
+                        if (name == "AccessMode")
+                        {
+                            port.AccessMode = (PortAccessMode)attrItem[1].FirstValue<byte>();
+                            Log($"[S14F3] Port{portId} AccessMode={port.AccessMode}");
+                            PortStateChanged?.Invoke(this, portId);
+                        }
+                    }
+                }
+                else result = 1; // unknown port
+            }
+        }
+        return new SecsMessage(14, 4, false) { SecsItem = B(result) };
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // Stream 7: Process Program Management (Recipe)
+    // ═════════════════════════════════════════════════════════════
+
+    /// <summary>S7F1 PP-LOAD-INQUIRE — ホストがPP受け入れ可否を問い合わせ</summary>
+    private SecsMessage HandleS7F1(SecsMessage msg)
+    {
+        // PPGNT: 0=granted, 1=busy, 2=no space, 3=invalid PPID
+        byte ppgnt = 0;
+        if (msg.SecsItem != null)
+        {
+            var ppId = msg.SecsItem.GetString();
+            Log($"[S7F1] PP Load Inquire PPID={ppId}");
+            if (string.IsNullOrWhiteSpace(ppId))
+                ppgnt = 3;
+        }
+        return new SecsMessage(7, 2, false) { SecsItem = B(ppgnt) };
+    }
+
+    /// <summary>S7F3 PP-SEND — ホストがレシピボディを送信</summary>
+    private SecsMessage HandleS7F3(SecsMessage msg)
+    {
+        // L[A(PPID), B/A(PPBODY)]
+        byte ppacked = 0; // 0=accepted
+        if (msg.SecsItem?.Count >= 2)
+        {
+            var ppId   = msg.SecsItem[0].GetString();
+            var body   = msg.SecsItem[1].Format == SecsFormat.ASCII
+                ? System.Text.Encoding.UTF8.GetBytes(msg.SecsItem[1].GetString())
+                : msg.SecsItem[1].GetMemory<byte>().ToArray();
+
+            bool isNew = !ProcessPrograms.ContainsKey(ppId);
+            ProcessPrograms[ppId] = new ProcessProgram(ppId, body);
+            Log($"[S7F3] PP受信 PPID={ppId} ({body.Length} bytes) [{(isNew ? "NEW" : "UPDATE")}]");
+            ProcessProgramChanged?.Invoke(this, (ppId, false));
+            _ = SendCollectionEventAsync(isNew ? 201u : 201u); // ProcessProgramCreated
+        }
+        else ppacked = 1; // format error
+        return new SecsMessage(7, 4, false) { SecsItem = B(ppacked) };
+    }
+
+    /// <summary>S7F5 PP-REQUEST — ホストがレシピボディを要求</summary>
+    private SecsMessage HandleS7F5(SecsMessage msg)
+    {
+        var ppId = msg.SecsItem?.GetString() ?? "";
+        Log($"[S7F5] PP Request PPID={ppId}");
+
+        if (ProcessPrograms.TryGetValue(ppId, out var pp))
+            return new SecsMessage(7, 6, false)
+            {
+                SecsItem = L(A(pp.PpId), A(pp.BodyText))
+            };
+
+        // PPID not found → S7F0 (abort) or S9F11
+        Log($"[S7F5] PPID={ppId} not found");
+        return new SecsMessage(9, 11, false)
+        {
+            SecsItem = B(new byte[] { 7, 5 })
+        };
+    }
+
+    /// <summary>S7F17 PP-DELETE — ホストがレシピを削除</summary>
+    private SecsMessage HandleS7F17(SecsMessage msg)
+    {
+        // L[A(PPID1), A(PPID2), ...] or empty list = delete all
+        byte ppacked = 0;
+        if (msg.SecsItem != null && msg.SecsItem.Count == 0)
+        {
+            // 空リスト = 全削除
+            var all = ProcessPrograms.Keys.ToList();
+            ProcessPrograms.Clear();
+            foreach (var id in all)
+            {
+                Log($"[S7F17] PP削除 PPID={id}");
+                ProcessProgramChanged?.Invoke(this, (id, true));
+            }
+            _ = SendCollectionEventAsync(202u);
+        }
+        else if (msg.SecsItem != null)
+        {
+            foreach (var item in GetItems(msg.SecsItem))
+            {
+                var ppId = item.GetString();
+                if (ProcessPrograms.Remove(ppId))
+                {
+                    Log($"[S7F17] PP削除 PPID={ppId}");
+                    ProcessProgramChanged?.Invoke(this, (ppId, true));
+                    _ = SendCollectionEventAsync(202u);
+                }
+                else
+                {
+                    Log($"[S7F17] PPID={ppId} not found");
+                    ppacked = 4; // PPID not found
+                }
+            }
+        }
+        return new SecsMessage(7, 18, false) { SecsItem = B(ppacked) };
+    }
+
+    /// <summary>S7F19 PP-DIRECTORY — ホストがレシピ一覧を要求</summary>
+    private SecsMessage HandleS7F19(SecsMessage msg)
+    {
+        Log($"[S7F19] PP Directory ({ProcessPrograms.Count} programs)");
+        return new SecsMessage(7, 20, false)
+        {
+            SecsItem = L(ProcessPrograms.Keys.Select(id => (Item)A(id)))
+        };
     }
 
     // ═════════════════════════════════════════════════════════════
