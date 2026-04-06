@@ -145,10 +145,18 @@ public partial class EquipmentViewModel : ObservableObject
     // コマンド: アラーム操作
     // ─────────────────────────────────────────────────────────────
     [RelayCommand]
-    private async Task SetAlarm(uint alarmId) => await _model.SetAlarmAsync(alarmId, true);
+    private async Task SetAlarm(object? parameter)
+    {
+        if (uint.TryParse(parameter?.ToString(), out var alarmId))
+            await _model.SetAlarmAsync(alarmId, true);
+    }
 
     [RelayCommand]
-    private async Task ClearAlarm(uint alarmId) => await _model.SetAlarmAsync(alarmId, false);
+    private async Task ClearAlarm(object? parameter)
+    {
+        if (uint.TryParse(parameter?.ToString(), out var alarmId))
+            await _model.SetAlarmAsync(alarmId, false);
+    }
 
     [RelayCommand]
     private async Task ClearAllAlarms()

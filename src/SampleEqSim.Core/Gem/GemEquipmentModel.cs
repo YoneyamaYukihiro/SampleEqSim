@@ -877,7 +877,7 @@ public class GemEquipmentModel : IHostedService
     private SecsMessage HandleUnknown(SecsMessage msg)
     {
         Log($"[WARN] 未実装 S{msg.S}F{msg.F}");
-        return new SecsMessage(9, 5, "S9F5") { SecsItem = B(msg.S, msg.F) };
+        return new SecsMessage(9, 5, "S9F5") { SecsItem = B(new byte[] { msg.S, msg.F }) };
     }
 
     // ─────────────────────────────────────────────────────────────

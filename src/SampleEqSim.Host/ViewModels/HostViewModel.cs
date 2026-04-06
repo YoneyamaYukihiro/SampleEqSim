@@ -360,10 +360,6 @@ public partial class HostViewModel : ObservableObject
                 AddLog($"RCV << S{reply.S}F{reply.F} {reply.Name}", MsgLevel.Receive);
             onReply?.Invoke(reply);
         }
-        catch (SecsException ex)
-        {
-            AddLog($"[ERR] S{msg.S}F{msg.F}: {ex.Message}", MsgLevel.Error);
-        }
         catch (Exception ex)
         {
             AddLog($"[ERR] {ex.Message}", MsgLevel.Error);
