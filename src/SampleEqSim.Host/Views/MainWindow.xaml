@@ -159,7 +159,7 @@
                             <Button Content="S1F3 SV Request" Style="{StaticResource Btn}"
                                     Command="{Binding RequestStatusVariablesCommand}"/>
                             <TextBox Text="{Binding SvDataResult, Mode=OneWay}"
-                                     IsReadOnly="True" FontFamily="Consolas" FontSize="10"
+                                     IsReadOnly="True" FontFamily="Consolas, MS Gothic, Meiryo" FontSize="10"
                                      Background="#F1F5F9" Padding="4" MinHeight="50"
                                      TextWrapping="Wrap" Margin="0,2"/>
                         </StackPanel>
@@ -197,7 +197,7 @@
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
                         <ListView ItemsSource="{Binding MessageLog}"
-                                  FontFamily="Consolas" FontSize="11"
+                                  FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
                                   Background="#0F172A"
                                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                   VirtualizingPanel.IsVirtualizing="True"
@@ -246,7 +246,7 @@
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
                         <ListBox ItemsSource="{Binding EventLog}"
-                                 FontFamily="Consolas" FontSize="11"
+                                 FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
                                  Background="#1E293B" Foreground="#FCD34D"
                                  VirtualizingPanel.IsVirtualizing="True"/>
                     </Border>
