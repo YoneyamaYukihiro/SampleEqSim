@@ -199,7 +199,7 @@
 
                 <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
                     <ListBox ItemsSource="{Binding MessageLog}"
-                             FontFamily="Consolas" FontSize="11"
+                             FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
                              Background="#0F172A" Foreground="#E2E8F0"
                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              VirtualizingPanel.IsVirtualizing="True"
@@ -207,7 +207,7 @@
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="4,1"/>
-                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="FontFamily" Value="Consolas, MS Gothic, Meiryo"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding}" Value="">
                                         <Setter Property="Height" Value="0"/>

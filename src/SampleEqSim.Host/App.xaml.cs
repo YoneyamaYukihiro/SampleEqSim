@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Secs4Net;
+using SampleEqSim.Core.Secs;
 using SampleEqSim.Host.Services;
 using SampleEqSim.Host.ViewModels;
 using SampleEqSim.Host.Views;
@@ -18,7 +19,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        _host = Host.CreateDefaultBuilder()
+        _host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config =>
             {
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
@@ -26,7 +27,7 @@ public partial class App : Application
             .ConfigureServices((context, services) =>
             {
                 // SECS/GEM (Active = Host side)
-                services.AddSecs4Net<DeviceLogger>(context.Configuration);
+                services.AddSingleton<ISecsGem, NoopSecsGem>();
 
                 // HostGemService: メッセージループ + 接続状態管理
                 // シングルトンとして登録し、IHostedService にも追加
