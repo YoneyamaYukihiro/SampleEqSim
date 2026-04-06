@@ -1,0 +1,12 @@
+<Application x:Class="SampleEqSim.Host.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <SolidColorBrush x:Key="LedGreen"  Color="#22C55E"/>
+        <SolidColorBrush x:Key="LedRed"    Color="#EF4444"/>
+        <SolidColorBrush x:Key="LedYellow" Color="#EAB308"/>
+        <SolidColorBrush x:Key="LedGray"   Color="#6B7280"/>
+        <SolidColorBrush x:Key="LedBlue"   Color="#3B82F6"/>
+    </Application.Resources>
+</Application>

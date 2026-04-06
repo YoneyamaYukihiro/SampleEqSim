@@ -1,0 +1,223 @@
+<Window x:Class="SampleEqSim.Equipment.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:SampleEqSim.Equipment.ViewModels"
+        xmlns:conv="clr-namespace:SampleEqSim.Equipment.Views.Converters"
+        mc:Ignorable="d"
+        Title="SECS/GEM Equipment Simulator" Height="780" Width="1100"
+        Background="#F8FAFC">
+
+    <Window.Resources>
+        <conv:BoolToAlarmColorConverter x:Key="BoolToAlarmColor"/>
+        <conv:StringToLedBrushConverter x:Key="LedBrush"/>
+
+        <Style x:Key="LedIndicator" TargetType="Ellipse">
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="StateLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="3,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- ヘッダー -->
+        <Border DockPanel.Dock="Top" Background="#1E293B" Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="⚙ SECS/GEM Equipment Simulator  (Passive / Port 5000)"
+                           FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding CurrentTime}"
+                           FontSize="13" Foreground="#94A3B8" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- ステータスバー -->
+        <Border DockPanel.Dock="Top" Background="#334155" Padding="12,6">
+            <UniformGrid Rows="1" Columns="3">
+                <!-- Communication State -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="COMM:" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <Ellipse Style="{StaticResource LedIndicator}"
+                             Fill="{Binding CommunicationStateBrush, Converter={StaticResource LedBrush}}"/>
+                    <TextBlock Text="{Binding CommunicationStateText}" Style="{StaticResource StateLabel}" Foreground="White"/>
+                </StackPanel>
+                <!-- Control State -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="CTRL:" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <Ellipse Style="{StaticResource LedIndicator}"
+                             Fill="{Binding ControlStateBrush, Converter={StaticResource LedBrush}}"/>
+                    <TextBlock Text="{Binding ControlStateText}" Style="{StaticResource StateLabel}" Foreground="White"/>
+                </StackPanel>
+                <!-- Processing State -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="PROC:" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <Ellipse Style="{StaticResource LedIndicator}"
+                             Fill="{Binding ProcessingStateBrush, Converter={StaticResource LedBrush}}"/>
+                    <TextBlock Text="{Binding ProcessingStateText}" Style="{StaticResource StateLabel}" Foreground="White"/>
+                </StackPanel>
+            </UniformGrid>
+        </Border>
+
+        <!-- メインコンテンツ -->
+        <Grid Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左パネル: 操作 -->
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+
+                <!-- 処理状態操作 -->
+                <GroupBox Header="処理状態 (Processing State)" Style="{StaticResource GroupBoxStyle}">
+                    <UniformGrid Rows="2" Columns="3">
+                        <Button Content="IDLE" Style="{StaticResource Btn}" Command="{Binding SetIdleCommand}"/>
+                        <Button Content="SETUP" Style="{StaticResource Btn}" Command="{Binding SetSetupCommand}"/>
+                        <Button Content="READY" Style="{StaticResource Btn}" Command="{Binding SetReadyCommand}"/>
+                        <Button Content="EXECUTE" Style="{StaticResource Btn}" Command="{Binding SetExecutingCommand}"/>
+                        <Button Content="PAUSE" Style="{StaticResource Btn}" Command="{Binding SetPauseCommand}"/>
+                    </UniformGrid>
+                </GroupBox>
+
+                <!-- 装置プロセス値 -->
+                <GroupBox Header="プロセス値" Style="{StaticResource GroupBoxStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="温度 (°C)" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="500"
+                                Value="{Binding Temperature}" TickFrequency="10" Margin="4,2"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="圧力 (kPa)" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="200"
+                                Value="{Binding Pressure}" TickFrequency="5" Margin="4,2"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="ロットID" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding LotId, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="4,2" Padding="4,2"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="レシピID" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding RecipeId, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="4,2" Padding="4,2"/>
+
+                        <Button Grid.Row="4" Grid.Column="1" Content="値を更新"
+                                Style="{StaticResource Btn}" Command="{Binding UpdateValuesCommand}"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- イベント送信 -->
+                <GroupBox Header="イベント送信 (Collection Events)" Style="{StaticResource GroupBoxStyle}">
+                    <StackPanel>
+                        <Button Content="LotStarted (CEID=103)" Style="{StaticResource Btn}"
+                                Command="{Binding SendLotStartedCommand}"/>
+                        <Button Content="LotCompleted (CEID=104)" Style="{StaticResource Btn}"
+                                Command="{Binding SendLotCompletedCommand}"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- アラーム操作 -->
+                <GroupBox Header="アラーム管理" Style="{StaticResource GroupBoxStyle}">
+                    <StackPanel>
+                        <DataGrid ItemsSource="{Binding AlarmList}" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" Height="130" FontSize="11"
+                                  IsReadOnly="True" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ALID" Binding="{Binding AlarmId}" Width="40"/>
+                                <DataGridTextColumn Header="コード" Binding="{Binding AlarmCode}" Width="80"/>
+                                <DataGridTemplateColumn Header="状態" Width="50">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Ellipse Width="10" Height="10"
+                                                     Fill="{Binding IsSet, Converter={StaticResource BoolToAlarmColor}}"
+                                                     HorizontalAlignment="Center"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <UniformGrid Rows="1" Columns="3" Margin="0,4,0,0">
+                            <Button Content="AL1 SET" Style="{StaticResource Btn}"
+                                    Command="{Binding SetAlarmCommand}" CommandParameter="1"/>
+                            <Button Content="AL2 SET" Style="{StaticResource Btn}"
+                                    Command="{Binding SetAlarmCommand}" CommandParameter="2"/>
+                            <Button Content="全クリア" Style="{StaticResource Btn}"
+                                    Command="{Binding ClearAllAlarmsCommand}"/>
+                        </UniformGrid>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+
+            <!-- 右パネル: ログ -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="通信ログ (Message Log)" FontSize="13" FontWeight="Bold"
+                               Foreground="#334155" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Content="ログクリア" Style="{StaticResource Btn}"
+                            Command="{Binding ClearLogCommand}"/>
+                </Grid>
+
+                <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
+                    <ListBox ItemsSource="{Binding MessageLog}"
+                             FontFamily="Consolas" FontSize="11"
+                             Background="#0F172A" Foreground="#E2E8F0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="4,1"/>
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding}" Value="">
+                                        <Setter Property="Height" Value="0"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>
