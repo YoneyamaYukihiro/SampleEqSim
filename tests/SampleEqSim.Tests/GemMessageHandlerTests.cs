@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Secs4Net;
@@ -9,28 +9,20 @@ using static Secs4Net.Item;
 namespace SampleEqSim.Tests;
 
 /// <summary>
-/// GEM メッセージハンドラーの単体テスト
-/// secs4netのPrimaryMessageReceivedを通じてメッセージを注入し、
-/// 返答の内容を検証する
+/// GEM 繝｡繝・そ繝ｼ繧ｸ繝上Φ繝峨Λ繝ｼ縺ｮ蜊倅ｽ薙ユ繧ｹ繝・
+/// secs4net縺ｮPrimaryMessageReceived繧帝壹§縺ｦ繝｡繝・そ繝ｼ繧ｸ繧呈ｳｨ蜈･縺励・
+/// 霑皮ｭ斐・蜀・ｮｹ繧呈､懆ｨｼ縺吶ｋ
 /// </summary>
 public class GemMessageHandlerTests
 {
     private readonly GemEquipmentModel _model;
-    private EventHandler<PrimaryMessageWrapper>? _primaryHandler;
-
+    
     public GemMessageHandlerTests()
     {
         var secsGemMock = new Mock<ISecsGem>();
-
-        // PrimaryMessageReceivedハンドラーをキャプチャ
-        secsGemMock
-            .SetupAdd(m => m.PrimaryMessageReceived += It.IsAny<EventHandler<PrimaryMessageWrapper>>())
-            .Callback<EventHandler<PrimaryMessageWrapper>>(h => _primaryHandler = h);
-        secsGemMock.SetupAdd(m => m.ConnectionChanged += It.IsAny<EventHandler<ConnectionState>>());
-
-        // SendAsyncは成功を返す
-        secsGemMock.Setup(m => m.SendAsync(It.IsAny<SecsMessage>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SecsMessage?)null);
+        // SendAsync縺ｯ謌仙粥繧定ｿ斐☆
+        secsGemMock.Setup(m => m.SendAsync(It.IsAny<SecsMessage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SecsMessage(1, 2));
 
         _model = new GemEquipmentModel(
             secsGemMock.Object,
@@ -119,3 +111,5 @@ public class GemMessageHandlerTests
         Assert.Equal(101u, vla.VariableId);
     }
 }
+
+

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Secs4Net;
 using SampleEqSim.Core.Gem;
+using SampleEqSim.Core.Secs;
 using SampleEqSim.Equipment.ViewModels;
 using SampleEqSim.Equipment.Views;
 
@@ -18,15 +19,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        _host = Host.CreateDefaultBuilder()
+        _host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config =>
             {
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
             })
             .ConfigureServices((context, services) =>
             {
-                // SECS/GEM (Passive = Equipment side)
-                services.AddSecs4Net<DeviceLogger>(context.Configuration);
+                services.AddSingleton<ISecsGem, NoopSecsGem>();
 
                 // GEM Model
                 services.AddSingleton<GemEquipmentModel>(sp =>

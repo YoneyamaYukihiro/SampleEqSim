@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Secs4Net;
@@ -8,7 +8,7 @@ using Xunit;
 namespace SampleEqSim.Tests;
 
 /// <summary>
-/// GEM 状態機械の単体テスト
+/// GEM 迥ｶ諷区ｩ滓｢ｰ縺ｮ蜊倅ｽ薙ユ繧ｹ繝・
 /// </summary>
 public class GemStateTests
 {
@@ -18,9 +18,6 @@ public class GemStateTests
     public GemStateTests()
     {
         _secsGemMock = new Mock<ISecsGem>();
-        // ConnectionChanged と PrimaryMessageReceived のイベント登録を設定
-        _secsGemMock.SetupAdd(m => m.ConnectionChanged += It.IsAny<EventHandler<ConnectionState>>());
-        _secsGemMock.SetupAdd(m => m.PrimaryMessageReceived += It.IsAny<EventHandler<PrimaryMessageWrapper>>());
 
         _model = new GemEquipmentModel(
             _secsGemMock.Object,
@@ -139,9 +136,10 @@ public class GemStateTests
     [Fact]
     public async Task SetAlarm_WhenNotCommunicating_ShouldNotThrow()
     {
-        // 通信していない場合はS5F1を送信しないことを確認
+        // 騾壻ｿ｡縺励※縺・↑縺・ｴ蜷医・S5F1繧帝∽ｿ｡縺励↑縺・％縺ｨ繧堤｢ｺ隱・
         var ex = await Record.ExceptionAsync(() => _model.SetAlarmAsync(1, true));
         Assert.Null(ex);
         Assert.True(_model.Alarms[1].IsSet);
     }
 }
+

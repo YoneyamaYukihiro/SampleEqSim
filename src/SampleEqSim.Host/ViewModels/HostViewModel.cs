@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,33 +11,33 @@ public partial class HostViewModel : ObservableObject
 {
     private readonly ISecsGem _secsGem;
 
-    // ── 接続状態 ──────────────────────────────────────────────────
+    // 笏笏 謗･邯夂憾諷・笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [ObservableProperty] private string _connectionStateText = "DISCONNECTED";
     [ObservableProperty] private string _connectionLedBrush = "LedGray";
     [ObservableProperty] private bool _isConnected = false;
 
-    // ── 装置情報 ──────────────────────────────────────────────────
+    // 笏笏 陬・ｽｮ諠・ｱ 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [ObservableProperty] private string _equipmentModel = "-";
     [ObservableProperty] private string _equipmentSoftRev = "-";
     [ObservableProperty] private string _equipmentDateTime = "-";
     [ObservableProperty] private string _equipmentControlState = "-";
     [ObservableProperty] private string _equipmentProcState = "-";
 
-    // ── コマンド入力 ──────────────────────────────────────────────
+    // 笏笏 繧ｳ繝槭Φ繝牙・蜉・笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [ObservableProperty] private string _hostCommandText = "START";
 
-    // ── SVIDリクエスト ────────────────────────────────────────────
+    // 笏笏 SVID繝ｪ繧ｯ繧ｨ繧ｹ繝・笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [ObservableProperty] private string _requestSvIds = "101,102,103";
     [ObservableProperty] private string _svDataResult = "";
 
-    // ── ログ ──────────────────────────────────────────────────────
+    // 笏笏 繝ｭ繧ｰ 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     public ObservableCollection<LogEntry> MessageLog { get; } = new();
     private const int MaxLogLines = 2000;
 
-    // ── 受信イベントログ ──────────────────────────────────────────
+    // 笏笏 蜿嶺ｿ｡繧､繝吶Φ繝医Ο繧ｰ 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     public ObservableCollection<string> EventLog { get; } = new();
 
-    // ── 時刻 ──────────────────────────────────────────────────────
+    // 笏笏 譎ょ綾 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [ObservableProperty] private string _currentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
     private readonly DispatcherTimer _clockTimer;
@@ -46,17 +46,16 @@ public partial class HostViewModel : ObservableObject
     {
         _secsGem = secsGem;
 
-        _secsGem.ConnectionChanged += OnConnectionChanged;
-        _secsGem.PrimaryMessageReceived += OnPrimaryMessageReceived;
+        
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clockTimer.Tick += (_, _) => CurrentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         _clockTimer.Start();
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 接続状態変化
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 謗･邯夂憾諷句､牙喧
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     private void OnConnectionChanged(object? sender, ConnectionState state)
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -69,18 +68,18 @@ public partial class HostViewModel : ObservableObject
                 ConnectionState.Retry => "LedYellow",
                 _ => "LedGray",
             };
-            AddLog($"[HSMS] 接続状態変化: {state}", LogLevel.System);
+            AddLog($"[HSMS] 謗･邯夂憾諷句､牙喧: {state}", LogLevel.System);
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 受信メッセージ処理 (装置からのプライマリメッセージ)
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 蜿嶺ｿ｡繝｡繝・そ繝ｼ繧ｸ蜃ｦ逅・(陬・ｽｮ縺九ｉ縺ｮ繝励Λ繧､繝槭Μ繝｡繝・そ繝ｼ繧ｸ)
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     private async void OnPrimaryMessageReceived(object? sender, PrimaryMessageWrapper e)
     {
         var msg = e.PrimaryMessage;
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            AddLog($"RCV << S{msg.S}F{msg.F} {msg.Name}", LogLevel.Receive));
+            AddLog($"RCV << S{msg.S}F{msg.F} ", LogLevel.Receive));
 
         SecsMessage? reply = (msg.S, msg.F) switch
         {
@@ -96,8 +95,8 @@ public partial class HostViewModel : ObservableObject
         if (msg.ReplyExpected && reply != null)
         {
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                AddLog($"SND >> S{reply.S}F{reply.F} {reply.Name}", LogLevel.Send));
-            await e.ReplyAsync(reply);
+                AddLog($"SND >> S{reply.S}F{reply.F} ", LogLevel.Send));
+            await e.TryReplyAsync(reply);
         }
     }
 
@@ -116,7 +115,7 @@ public partial class HostViewModel : ObservableObject
                 AddLog(ev, isSet ? LogLevel.Alarm : LogLevel.System);
             });
         }
-        return new SecsMessage(5, 2, "S5F2") { SecsItem = B(0) };
+        return new SecsMessage(5, 2) { SecsItem = B(0) };
     }
 
     private SecsMessage HandleS6F11(SecsMessage msg)
@@ -130,7 +129,7 @@ public partial class HostViewModel : ObservableObject
                 while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
             });
         }
-        return new SecsMessage(6, 12, "S6F12") { SecsItem = B(0) };
+        return new SecsMessage(6, 12) { SecsItem = B(0) };
     }
 
     private SecsMessage HandleS10F1(SecsMessage msg)
@@ -141,16 +140,16 @@ public partial class HostViewModel : ObservableObject
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] [TERMINAL] {text}"));
         }
-        return new SecsMessage(10, 2, "S10F2") { SecsItem = B(0) };
+        return new SecsMessage(10, 2) { SecsItem = B(0) };
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F1 Are You There
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S1F1 Are You There
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task SendS1F1()
     {
-        await SendAndLog(new SecsMessage(1, 1, "S1F1"), reply =>
+        await SendAndLog(new SecsMessage(1, 1), reply =>
         {
             if (reply?.SecsItem?.Count >= 2)
             {
@@ -160,14 +159,14 @@ public partial class HostViewModel : ObservableObject
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F13 Establish Communications
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S1F13 Establish Communications
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task SendS1F13()
     {
         await SendAndLog(
-            new SecsMessage(1, 13, "S1F13") { SecsItem = L(A("HOST"), A("1.0")) },
+            new SecsMessage(1, 13) { SecsItem = L(A("HOST"), A("1.0")) },
             reply =>
             {
                 if (reply?.SecsItem?.Count >= 2)
@@ -178,47 +177,47 @@ public partial class HostViewModel : ObservableObject
             });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F15 Request OFF-LINE
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S1F15 Request OFF-LINE
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task SendS1F15()
     {
-        await SendAndLog(new SecsMessage(1, 15, "S1F15"), reply =>
+        await SendAndLog(new SecsMessage(1, 15), reply =>
         {
             var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
             AddLog($"  OFLACK={ack}", LogLevel.System);
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F17 Request ON-LINE
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S1F17 Request ON-LINE
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task SendS1F17()
     {
-        await SendAndLog(new SecsMessage(1, 17, "S1F17"), reply =>
+        await SendAndLog(new SecsMessage(1, 17), reply =>
         {
             var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
             AddLog($"  ONLACK={ack} ({(ack == 0 ? "OK" : ack == 2 ? "Already Online" : "Refused")})", LogLevel.System);
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F17 Date and Time Request
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S2F17 Date and Time Request
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task SendS2F17()
     {
-        await SendAndLog(new SecsMessage(2, 17, "S2F17"), reply =>
+        await SendAndLog(new SecsMessage(2, 17), reply =>
         {
             EquipmentDateTime = reply?.SecsItem?.GetString() ?? "-";
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S1F3 Status Variables Request
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S1F3 Status Variables Request
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task RequestStatusVariables()
     {
@@ -229,30 +228,30 @@ public partial class HostViewModel : ObservableObject
             .ToList();
 
         var svItems = ids.Select(id => (Item)U4(id)).ToList();
-        var msg = new SecsMessage(1, 3, "S1F3") { SecsItem = L(svItems) };
+        var msg = new SecsMessage(1, 3) { SecsItem = L(svItems) };
 
         await SendAndLog(msg, reply =>
         {
             if (reply?.SecsItem != null)
             {
-                var results = reply.SecsItem.Select((item, i) =>
-                    $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {item.ToSml()}").ToList();
+                var results = reply.SecsItem.Items.Select((item, i) =>
+                    $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {item.ToString()}").ToList();
                 SvDataResult = string.Join("\n", results);
             }
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S5F5 List Alarms
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S5F5 List Alarms
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task ListAlarms()
     {
-        await SendAndLog(new SecsMessage(5, 5, "S5F5") { SecsItem = L() }, reply =>
+        await SendAndLog(new SecsMessage(5, 5) { SecsItem = L() }, reply =>
         {
             if (reply?.SecsItem != null)
             {
-                foreach (var alarmItem in reply.SecsItem)
+                foreach (var alarmItem in reply.SecsItem.Items)
                 {
                     if (alarmItem.Count >= 3)
                     {
@@ -265,14 +264,14 @@ public partial class HostViewModel : ObservableObject
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F41 Host Command
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S2F41 Host Command
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task SendHostCommand()
     {
         if (string.IsNullOrWhiteSpace(HostCommandText)) return;
-        var msg = new SecsMessage(2, 41, "S2F41")
+        var msg = new SecsMessage(2, 41)
         {
             SecsItem = L(A(HostCommandText.ToUpper()), L())
         };
@@ -286,14 +285,14 @@ public partial class HostViewModel : ObservableObject
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F33 Define Report
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S2F33 Define Report
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task DefineReport()
     {
         // RPTID=1: SV 101 (Temperature), 102 (Pressure), 103 (LotId)
-        var msg = new SecsMessage(2, 33, "S2F33")
+        var msg = new SecsMessage(2, 33)
         {
             SecsItem = L(
                 U4(1),     // DATAID
@@ -307,20 +306,20 @@ public partial class HostViewModel : ObservableObject
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F35 Link Event Report
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S2F35 Link Event Report
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task LinkEventReport()
     {
-        // CEID=101 (ProcessStarted) → RPTID=1
-        var msg = new SecsMessage(2, 35, "S2F35")
+        // CEID=101 (ProcessStarted) 竊・RPTID=1
+        var msg = new SecsMessage(2, 35)
         {
             SecsItem = L(
                 U4(1),   // DATAID
                 L(
-                    L(U4(101u), L(U4(1u))),   // CEID=101 → RPTID=1
-                    L(U4(102u), L(U4(1u)))))  // CEID=102 → RPTID=1
+                    L(U4(101u), L(U4(1u))),   // CEID=101 竊・RPTID=1
+                    L(U4(102u), L(U4(1u)))))  // CEID=102 竊・RPTID=1
         };
         await SendAndLog(msg, reply =>
         {
@@ -329,15 +328,15 @@ public partial class HostViewModel : ObservableObject
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: S2F37 Enable/Disable Events (全有効)
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繧ｳ繝槭Φ繝・ S2F37 Enable/Disable Events (蜈ｨ譛牙柑)
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     [RelayCommand]
     private async Task EnableAllEvents()
     {
-        var msg = new SecsMessage(2, 37, "S2F37")
+        var msg = new SecsMessage(2, 37)
         {
-            SecsItem = L(Boolean(true), L()) // 全CEID有効
+            SecsItem = L(Boolean(true), L()) // 蜈ｨCEID譛牙柑
         };
         await SendAndLog(msg, reply =>
         {
@@ -346,22 +345,22 @@ public partial class HostViewModel : ObservableObject
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // ヘルパー: メッセージ送信 + ログ
-    // ─────────────────────────────────────────────────────────────
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+    // 繝倥Ν繝代・: 繝｡繝・そ繝ｼ繧ｸ騾∽ｿ｡ + 繝ｭ繧ｰ
+    // 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
     private async Task SendAndLog(SecsMessage msg, Action<SecsMessage?>? onReply = null)
     {
         if (!IsConnected)
         {
-            AddLog("[ERR] 未接続です", LogLevel.Error);
+            AddLog("[ERR] Not connected", LogLevel.Error);
             return;
         }
         try
         {
-            AddLog($"SND >> S{msg.S}F{msg.F} {msg.Name}", LogLevel.Send);
+            AddLog($"SND >> S{msg.S}F{msg.F} ", LogLevel.Send);
             var reply = await _secsGem.SendAsync(msg);
             if (reply != null)
-                AddLog($"RCV << S{reply.S}F{reply.F} {reply.Name}", LogLevel.Receive);
+                AddLog($"RCV << S{reply.S}F{reply.F} ", LogLevel.Receive);
             onReply?.Invoke(reply);
         }
         catch (SecsException ex)
@@ -389,9 +388,9 @@ public partial class HostViewModel : ObservableObject
     private void ClearEventLog() => EventLog.Clear();
 }
 
-// ─────────────────────────────────────────────────────────────
-// ログエントリ
-// ─────────────────────────────────────────────────────────────
+// 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+// 繝ｭ繧ｰ繧ｨ繝ｳ繝医Μ
+// 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 public enum LogLevel { System, Send, Receive, Alarm, Error }
 
 public class LogEntry
@@ -403,11 +402,11 @@ public class LogEntry
 
     public string ForegroundColor => Level switch
     {
-        LogLevel.Send    => "#60A5FA",  // 青
-        LogLevel.Receive => "#4ADE80",  // 緑
-        LogLevel.Alarm   => "#F87171",  // 赤
-        LogLevel.Error   => "#FB923C",  // オレンジ
-        _                => "#E2E8F0",  // 白
+        LogLevel.Send    => "#60A5FA",  // 髱・
+        LogLevel.Receive => "#4ADE80",  // 邱・
+        LogLevel.Alarm   => "#F87171",  // 襍､
+        LogLevel.Error   => "#FB923C",  // 繧ｪ繝ｬ繝ｳ繧ｸ
+        _                => "#E2E8F0",  // 逋ｽ
     };
 
     public LogEntry(DateTime time, string message, LogLevel level)
@@ -419,3 +418,5 @@ public class LogEntry
 
     public override string ToString() => $"[{TimeText}] {Message}";
 }
+
+
