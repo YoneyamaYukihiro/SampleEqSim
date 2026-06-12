@@ -93,7 +93,7 @@ public partial class HostViewModel : ObservableObject
         {
             App.Current.Dispatcher.Invoke(() =>
                 AddLog($"SND >> S{reply.S}F{reply.F} {reply.Name}", MsgLevel.Send));
-            await e.ReplyAsync(reply);
+            await e.TryReplyAsync(reply);
         }
     }
 
@@ -113,7 +113,7 @@ public partial class HostViewModel : ObservableObject
                 while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
             });
         }
-        return new SecsMessage(5, 2, "S5F2") { SecsItem = B(0) };
+        return new SecsMessage(5, 2) { Name = "S5F2", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS6F11(SecsMessage msg)
@@ -127,7 +127,7 @@ public partial class HostViewModel : ObservableObject
                 while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
             });
         }
-        return new SecsMessage(6, 12, "S6F12") { SecsItem = B(0) };
+        return new SecsMessage(6, 12) { Name = "S6F12", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS10F1(SecsMessage msg)
@@ -141,7 +141,7 @@ public partial class HostViewModel : ObservableObject
                 while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
             });
         }
-        return new SecsMessage(10, 2, "S10F2") { SecsItem = B(0) };
+        return new SecsMessage(10, 2) { Name = "S10F2", SecsItem = B(0) };
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ public partial class HostViewModel : ObservableObject
     [RelayCommand]
     private async Task SendS1F1()
     {
-        await SendAndLog(new SecsMessage(1, 1, "S1F1"), reply =>
+        await SendAndLog(new SecsMessage(1, 1) { Name = "S1F1" }, reply =>
         {
             if (reply?.SecsItem?.Count >= 2)
             {
@@ -167,7 +167,7 @@ public partial class HostViewModel : ObservableObject
     private async Task SendS1F13()
     {
         await SendAndLog(
-            new SecsMessage(1, 13, "S1F13") { SecsItem = L(A("HOST"), A("1.0")) },
+            new SecsMessage(1, 13) { Name = "S1F13", SecsItem = L(A("HOST"), A("1.0")) },
             reply =>
             {
                 var commack = reply?.SecsItem?[0].FirstValue<byte>() ?? 0xFF;
@@ -181,7 +181,7 @@ public partial class HostViewModel : ObservableObject
     [RelayCommand]
     private async Task SendS1F15()
     {
-        await SendAndLog(new SecsMessage(1, 15, "S1F15"), reply =>
+        await SendAndLog(new SecsMessage(1, 15) { Name = "S1F15" }, reply =>
         {
             var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
             AddLog($"  OFLACK={ack}", MsgLevel.System);
@@ -194,7 +194,7 @@ public partial class HostViewModel : ObservableObject
     [RelayCommand]
     private async Task SendS1F17()
     {
-        await SendAndLog(new SecsMessage(1, 17, "S1F17"), reply =>
+        await SendAndLog(new SecsMessage(1, 17) { Name = "S1F17" }, reply =>
         {
             var ack = reply?.SecsItem?.FirstValue<byte>() ?? 0xFF;
             AddLog($"  ONLACK={ack} ({(ack == 0 ? "OK" : ack == 2 ? "Already Online" : "Refused")})", MsgLevel.System);
@@ -207,7 +207,7 @@ public partial class HostViewModel : ObservableObject
     [RelayCommand]
     private async Task SendS2F17()
     {
-        await SendAndLog(new SecsMessage(2, 17, "S2F17"), reply =>
+        await SendAndLog(new SecsMessage(2, 17) { Name = "S2F17" }, reply =>
         {
             EquipmentDateTime = reply?.SecsItem?.GetString() ?? "-";
         });
@@ -225,17 +225,17 @@ public partial class HostViewModel : ObservableObject
             .Select(uint.Parse)
             .ToList();
 
-        var msg = new SecsMessage(1, 3, "S1F3")
+        var msg = new SecsMessage(1, 3)
         {
-            SecsItem = L(ids.Select(id => (Item)U4(id)))
+            Name = "S1F3", SecsItem = L(ids.Select(id => (Item)U4(id)))
         };
 
         await SendAndLog(msg, reply =>
         {
             if (reply?.SecsItem != null)
             {
-                var lines = reply.SecsItem
-                    .Select((item, i) => $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {item.ToSml()}")
+                var lines = reply.SecsItem.Items
+                    .Select((item, i) => $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {FormatItem(item)}")
                     .ToList();
                 SvDataResult = string.Join("\n", lines);
             }
@@ -248,10 +248,10 @@ public partial class HostViewModel : ObservableObject
     [RelayCommand]
     private async Task ListAlarms()
     {
-        await SendAndLog(new SecsMessage(5, 5, "S5F5") { SecsItem = L() }, reply =>
+        await SendAndLog(new SecsMessage(5, 5) { Name = "S5F5", SecsItem = L() }, reply =>
         {
             if (reply?.SecsItem == null) return;
-            foreach (var alarmItem in reply.SecsItem)
+            foreach (var alarmItem in reply.SecsItem.Items)
             {
                 if (alarmItem.Count >= 3)
                     AddLog($"  ALARM ALID={alarmItem[1].FirstValue<uint>()}: {alarmItem[2].GetString()}",
@@ -268,9 +268,9 @@ public partial class HostViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(HostCommandText)) return;
         await SendAndLog(
-            new SecsMessage(2, 41, "S2F41")
+            new SecsMessage(2, 41)
             {
-                SecsItem = L(A(HostCommandText.ToUpperInvariant()), L())
+                Name = "S2F41", SecsItem = L(A(HostCommandText.ToUpperInvariant()), L())
             },
             reply =>
             {
@@ -288,9 +288,9 @@ public partial class HostViewModel : ObservableObject
     {
         // RPTID=1: SV 101(Temperature), 102(Pressure), 103(LotId)
         await SendAndLog(
-            new SecsMessage(2, 33, "S2F33")
+            new SecsMessage(2, 33)
             {
-                SecsItem = L(
+                Name = "S2F33", SecsItem = L(
                     U4(1),
                     L(L(U4(1u), L(U4(101u), U4(102u), U4(103u)))))
             },
@@ -309,9 +309,9 @@ public partial class HostViewModel : ObservableObject
     {
         // CEID=101,102 → RPTID=1
         await SendAndLog(
-            new SecsMessage(2, 35, "S2F35")
+            new SecsMessage(2, 35)
             {
-                SecsItem = L(
+                Name = "S2F35", SecsItem = L(
                     U4(1),
                     L(
                         L(U4(101u), L(U4(1u))),
@@ -331,9 +331,9 @@ public partial class HostViewModel : ObservableObject
     private async Task EnableAllEvents()
     {
         await SendAndLog(
-            new SecsMessage(2, 37, "S2F37")
+            new SecsMessage(2, 37)
             {
-                SecsItem = L(Boolean(true), L())
+                Name = "S2F37", SecsItem = L(Boolean(true), L())
             },
             reply =>
             {
@@ -365,6 +365,27 @@ public partial class HostViewModel : ObservableObject
             AddLog($"[ERR] {ex.Message}", MsgLevel.Error);
         }
     }
+
+    // Item 値の表示用整形 (Secs4Net.Sml の ToSml() は別パッケージのため自前で簡易整形)
+    private static string FormatItem(Item item) => item.Format switch
+    {
+        SecsFormat.List    => $"<L[{item.Count}]>",
+        SecsFormat.ASCII
+        or SecsFormat.JIS8 => item.GetString(),
+        SecsFormat.Boolean => item.Count > 0 ? item.FirstValue<bool>().ToString()   : "",
+        SecsFormat.Binary  => item.Count > 0 ? item.FirstValue<byte>().ToString()   : "",
+        SecsFormat.U1      => item.Count > 0 ? item.FirstValue<byte>().ToString()   : "",
+        SecsFormat.U2      => item.Count > 0 ? item.FirstValue<ushort>().ToString() : "",
+        SecsFormat.U4      => item.Count > 0 ? item.FirstValue<uint>().ToString()   : "",
+        SecsFormat.U8      => item.Count > 0 ? item.FirstValue<ulong>().ToString()  : "",
+        SecsFormat.I1      => item.Count > 0 ? item.FirstValue<sbyte>().ToString()  : "",
+        SecsFormat.I2      => item.Count > 0 ? item.FirstValue<short>().ToString()  : "",
+        SecsFormat.I4      => item.Count > 0 ? item.FirstValue<int>().ToString()    : "",
+        SecsFormat.I8      => item.Count > 0 ? item.FirstValue<long>().ToString()   : "",
+        SecsFormat.F4      => item.Count > 0 ? item.FirstValue<float>().ToString()  : "",
+        SecsFormat.F8      => item.Count > 0 ? item.FirstValue<double>().ToString() : "",
+        _                  => "",
+    };
 
     private void AddLog(string message, MsgLevel level = MsgLevel.System)
     {

@@ -9,6 +9,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>SampleEqSim.Host</RootNamespace>
     <StartupObject>SampleEqSim.Host.App</StartupObject>
+    <ApplicationIcon>host.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SampleEqSim.Core\SampleEqSim.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="host.ico" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,8 +6,9 @@
         xmlns:vm="clr-namespace:SampleEqSim.Equipment.ViewModels"
         xmlns:conv="clr-namespace:SampleEqSim.Equipment.Views.Converters"
         mc:Ignorable="d"
-        Title="SECS/GEM Equipment Simulator" Height="780" Width="1100"
-        Background="#F8FAFC">
+        Title="SECS/GEM Equipment Simulator [装置]" Height="780" Width="1100"
+        Icon="pack://application:,,,/equipment.ico"
+        Background="#F0FDFA">
 
     <Window.Resources>
         <conv:BoolToAlarmColorConverter x:Key="BoolToAlarmColor"/>
@@ -40,13 +41,13 @@
 
     <DockPanel>
         <!-- ヘッダー -->
-        <Border DockPanel.Dock="Top" Background="#1E293B" Padding="12,8">
+        <Border DockPanel.Dock="Top" Background="#0F766E" Padding="12,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="⚙ SECS/GEM Equipment Simulator  (Passive / Port 5000)"
+                <TextBlock Text="⚙ EQUIPMENT 装置シミュレータ  (Passive / Port 5000)"
                            FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="1" Text="{Binding CurrentTime}"
                            FontSize="13" Foreground="#94A3B8" VerticalAlignment="Center"/>
@@ -54,7 +55,7 @@
         </Border>
 
         <!-- ステータスバー -->
-        <Border DockPanel.Dock="Top" Background="#334155" Padding="12,6">
+        <Border DockPanel.Dock="Top" Background="#115E59" Padding="12,6">
             <UniformGrid Rows="1" Columns="3">
                 <!-- Communication State -->
                 <StackPanel Orientation="Horizontal">

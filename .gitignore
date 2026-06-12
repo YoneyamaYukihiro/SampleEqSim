@@ -1,0 +1,16 @@
+# ビルド成果物
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# ローカル .NET / NuGet (このリポジトリ固有のローカルツール展開先)
+.dotnet/
+.nuget/
+
+# 診断ログ・実行時ログ
+*-diag.log
+startup-error.log

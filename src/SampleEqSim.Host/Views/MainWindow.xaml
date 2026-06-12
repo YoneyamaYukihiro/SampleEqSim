@@ -5,8 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:conv="clr-namespace:SampleEqSim.Host.Views.Converters"
         mc:Ignorable="d"
-        Title="SECS/GEM Host Simulator" Height="800" Width="1150"
-        Background="#F8FAFC">
+        Title="SECS/GEM Host Simulator [ホスト]" Height="800" Width="1150"
+        Icon="pack://application:,,,/host.ico"
+        Background="#EEF2FF">
 
     <Window.Resources>
         <conv:StringToLedBrushConverter x:Key="LedBrush"/>
@@ -33,7 +34,7 @@
 
     <DockPanel>
         <!-- ヘッダー -->
-        <Border DockPanel.Dock="Top" Background="#1E293B" Padding="12,8">
+        <Border DockPanel.Dock="Top" Background="#1E40AF" Padding="12,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -43,7 +44,7 @@
                     <Ellipse Style="{StaticResource LedIndicator}"
                              Fill="{Binding ConnectionLedBrush, Converter={StaticResource LedBrush}}"
                              Width="14" Height="14"/>
-                    <TextBlock Text="SECS/GEM Host Simulator  (Active / 127.0.0.1:5000)"
+                    <TextBlock Text="🖥 HOST ホストシミュレータ  (Active / 127.0.0.1:5000)"
                                FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                     <TextBlock Text="  |  " Foreground="#475569" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding ConnectionStateText}" FontSize="13"
@@ -56,7 +57,7 @@
         </Border>
 
         <!-- 装置情報バー -->
-        <Border DockPanel.Dock="Top" Background="#334155" Padding="12,6">
+        <Border DockPanel.Dock="Top" Background="#1E3A8A" Padding="12,6">
             <UniformGrid Rows="1" Columns="5">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Model:" Foreground="#94A3B8" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>

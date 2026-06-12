@@ -12,6 +12,9 @@ namespace SampleEqSim.Core.Gem;
 public class GemEquipmentModel : IHostedService
 {
     private readonly ISecsGem _secsGem;
+    // ISecsConnection は internal メンバを持ち外部でモック不可のため、単体テストでは null を許容する。
+    // 実アプリ (DI) では常に実体 (HsmsConnection) が渡される。
+    private readonly ISecsConnection? _connection;
     private readonly ILogger<GemEquipmentModel> _logger;
 
     // ─── State Machines ──────────────────────────────────────────
@@ -52,14 +55,18 @@ public class GemEquipmentModel : IHostedService
     // T7 タイマー
     private System.Timers.Timer? _t7Timer;
 
-    public GemEquipmentModel(ISecsGem secsGem, ILogger<GemEquipmentModel> logger)
+    // メッセージ受信ループのキャンセル用
+    private CancellationTokenSource? _loopCts;
+
+    public GemEquipmentModel(ISecsGem secsGem, ISecsConnection? connection, ILogger<GemEquipmentModel> logger)
     {
         _secsGem = secsGem;
+        _connection = connection;
         _logger = logger;
 
-        // ISecsConnection にキャストして接続状態変化を購読
-        if (secsGem is ISecsConnection connection)
-            connection.ConnectionChanged += OnConnectionChanged;
+        // 接続状態変化を購読 (ISecsConnection は ISecsGem とは別オブジェクト)
+        if (_connection is not null)
+            _connection.ConnectionChanged += OnConnectionChanged;
 
         InitializeGemData();
     }
@@ -67,11 +74,26 @@ public class GemEquipmentModel : IHostedService
     // ─────────────────────────────────────────────────────────────
     // IHostedService
     // ─────────────────────────────────────────────────────────────
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        // IHostedService.StartAsync は速やかに return する必要がある。
+        // メッセージ受信ループをここで await foreach すると StartAsync が完了せず、
+        // Host.StartAsync も完了しないため UI ウィンドウが表示されない。
+        // ループはバックグラウンドで実行し、ここではブロックしない。
+        _loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _ = RunMessageLoopAsync(_loopCts.Token);
+        return Task.CompletedTask;
+    }
+
+    private async Task RunMessageLoopAsync(CancellationToken ct)
     {
         try
         {
-            await foreach (var e in _secsGem.GetPrimaryMessageAsync(cancellationToken))
+            // HSMS 接続を開始 (Passive: 待受開始 / 接続受け入れ)。
+            // これを呼ばないと接続状態機械が動かず、ホストからの接続を受け付けない。
+            _connection?.Start(ct);
+
+            await foreach (var e in _secsGem.GetPrimaryMessageAsync(ct))
             {
                 await HandlePrimaryMessageAsync(e);
             }
@@ -88,9 +110,12 @@ public class GemEquipmentModel : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_secsGem is ISecsConnection connection)
-            connection.ConnectionChanged -= OnConnectionChanged;
+        if (_connection is not null)
+            _connection.ConnectionChanged -= OnConnectionChanged;
         StopT7Timer();
+        _loopCts?.Cancel();
+        _loopCts?.Dispose();
+        _loopCts = null;
         return Task.CompletedTask;
     }
 
@@ -279,9 +304,9 @@ public class GemEquipmentModel : IHostedService
 
         if (alarm.IsEnabled && _communicationState == CommunicationState.Communicating)
         {
-            var msg = new SecsMessage(5, 1, "S5F1")
+            var msg = new SecsMessage(5, 1)
             {
-                SecsItem = L(
+                Name = "S5F1", SecsItem = L(
                     B((byte)(set ? 0x81 : 0x01)),
                     U4(alarm.AlarmId),
                     A(alarm.AlarmText))
@@ -323,9 +348,9 @@ public class GemEquipmentModel : IHostedService
             }
         }
 
-        var s6f11 = new SecsMessage(6, 11, "S6F11")
+        var s6f11 = new SecsMessage(6, 11)
         {
-            SecsItem = L(
+            Name = "S6F11", SecsItem = L(
                 U4(0),
                 U4(ceid),
                 L(reportItems))
@@ -419,7 +444,7 @@ public class GemEquipmentModel : IHostedService
             if (msg.ReplyExpected && reply != null)
             {
                 Log($"SND >> S{reply.S}F{reply.F} {reply.Name}");
-                await e.ReplyAsync(reply);
+                await e.TryReplyAsync(reply);
             }
         }
         catch (Exception ex)
@@ -433,20 +458,20 @@ public class GemEquipmentModel : IHostedService
     // ═════════════════════════════════════════════════════════════
 
     private SecsMessage HandleS1F1(SecsMessage msg) =>
-        new SecsMessage(1, 2, "S1F2")
+        new SecsMessage(1, 2)
         {
-            SecsItem = L(A(ModelName), A(SoftRev))
+            Name = "S1F2", SecsItem = L(A(ModelName), A(SoftRev))
         };
 
     private SecsMessage HandleS1F3(SecsMessage msg)
     {
         var svIds = msg.SecsItem is { Count: > 0 }
-            ? msg.SecsItem.Select(i => i.FirstValue<uint>()).ToList()
+            ? msg.SecsItem.Items.Select(i => i.FirstValue<uint>()).ToList()
             : StatusVariables.Keys.ToList();
 
-        return new SecsMessage(1, 4, "S1F4")
+        return new SecsMessage(1, 4)
         {
-            SecsItem = L(svIds.Select(id =>
+            Name = "S1F4", SecsItem = L(svIds.Select(id =>
                 StatusVariables.TryGetValue(id, out var sv)
                     ? BuildTypedItem(sv.Format, sv.GetValue())
                     : L()))
@@ -456,12 +481,12 @@ public class GemEquipmentModel : IHostedService
     private SecsMessage HandleS1F11(SecsMessage msg)
     {
         var svIds = msg.SecsItem is { Count: > 0 }
-            ? msg.SecsItem.Select(i => i.FirstValue<uint>()).ToList()
+            ? msg.SecsItem.Items.Select(i => i.FirstValue<uint>()).ToList()
             : StatusVariables.Keys.ToList();
 
-        return new SecsMessage(1, 12, "S1F12")
+        return new SecsMessage(1, 12)
         {
-            SecsItem = L(svIds.Select(id =>
+            Name = "S1F12", SecsItem = L(svIds.Select(id =>
                 StatusVariables.TryGetValue(id, out var sv)
                     ? L(U4(id), A(sv.VariableName), A(sv.Units))
                     : L(U4(id), A(""), A(""))))
@@ -476,9 +501,9 @@ public class GemEquipmentModel : IHostedService
         if (_controlState == ControlState.EquipmentOffline)
             SetControlState(ControlState.AttemptOnline);
 
-        return new SecsMessage(1, 14, "S1F14")
+        return new SecsMessage(1, 14)
         {
-            SecsItem = L(
+            Name = "S1F14", SecsItem = L(
                 B(0),
                 L(A(ModelName), A(SoftRev)))
         };
@@ -487,14 +512,14 @@ public class GemEquipmentModel : IHostedService
     private SecsMessage HandleS1F15(SecsMessage msg)
     {
         SetControlState(ControlState.HostOffline);
-        return new SecsMessage(1, 16, "S1F16") { SecsItem = B(0) };
+        return new SecsMessage(1, 16) { Name = "S1F16", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS1F17(SecsMessage msg)
     {
         byte onlack = _controlState == ControlState.OnlineRemote ? (byte)2 : (byte)0;
         SetControlState(ControlState.OnlineRemote);
-        return new SecsMessage(1, 18, "S1F18") { SecsItem = B(onlack) };
+        return new SecsMessage(1, 18) { Name = "S1F18", SecsItem = B(onlack) };
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -504,12 +529,12 @@ public class GemEquipmentModel : IHostedService
     private SecsMessage HandleS2F13(SecsMessage msg)
     {
         var ecIds = msg.SecsItem is { Count: > 0 }
-            ? msg.SecsItem.Select(i => i.FirstValue<uint>()).ToList()
+            ? msg.SecsItem.Items.Select(i => i.FirstValue<uint>()).ToList()
             : EquipmentConstants.Keys.ToList();
 
-        return new SecsMessage(2, 14, "S2F14")
+        return new SecsMessage(2, 14)
         {
-            SecsItem = L(ecIds.Select(id =>
+            Name = "S2F14", SecsItem = L(ecIds.Select(id =>
                 EquipmentConstants.TryGetValue(id, out var ec)
                     ? BuildTypedItem(ec.Format, ec.CurrentValue)
                     : L()))
@@ -521,7 +546,7 @@ public class GemEquipmentModel : IHostedService
         byte eac = 0;
         if (msg.SecsItem != null)
         {
-            foreach (var item in msg.SecsItem)
+            foreach (var item in msg.SecsItem.Items)
             {
                 if (item.Count < 2) continue;
                 var ecid = item[0].FirstValue<uint>();
@@ -531,13 +556,13 @@ public class GemEquipmentModel : IHostedService
                 { eac = 1; break; }
             }
         }
-        return new SecsMessage(2, 16, "S2F16") { SecsItem = B(eac) };
+        return new SecsMessage(2, 16) { Name = "S2F16", SecsItem = B(eac) };
     }
 
     private SecsMessage HandleS2F17(SecsMessage msg) =>
-        new SecsMessage(2, 18, "S2F18")
+        new SecsMessage(2, 18)
         {
-            SecsItem = A(DateTime.Now.ToString("yyyyMMddHHmmss"))
+            Name = "S2F18", SecsItem = A(DateTime.Now.ToString("yyyyMMddHHmmss"))
         };
 
     private SecsMessage HandleS2F23(SecsMessage msg)
@@ -547,21 +572,21 @@ public class GemEquipmentModel : IHostedService
             var trid   = msg.SecsItem[0].FirstValue<uint>();
             var dsper  = msg.SecsItem[1].FirstValue<uint>();
             var totsmp = msg.SecsItem[2].FirstValue<uint>();
-            var svIds  = msg.SecsItem[3].Select(i => i.FirstValue<uint>()).ToList();
+            var svIds  = msg.SecsItem[3].Items.Select(i => i.FirstValue<uint>()).ToList();
             TraceRequests[trid] = new TraceDefinition(trid, dsper, totsmp, svIds) { IsActive = true };
         }
-        return new SecsMessage(2, 24, "S2F24") { SecsItem = B(0) };
+        return new SecsMessage(2, 24) { Name = "S2F24", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS2F29(SecsMessage msg)
     {
         var ecIds = msg.SecsItem is { Count: > 0 }
-            ? msg.SecsItem.Select(i => i.FirstValue<uint>()).ToList()
+            ? msg.SecsItem.Items.Select(i => i.FirstValue<uint>()).ToList()
             : EquipmentConstants.Keys.ToList();
 
-        return new SecsMessage(2, 30, "S2F30")
+        return new SecsMessage(2, 30)
         {
-            SecsItem = L(ecIds.Select(id =>
+            Name = "S2F30", SecsItem = L(ecIds.Select(id =>
                 EquipmentConstants.TryGetValue(id, out var ec)
                     ? L(U4(id),
                         A(ec.ConstantName),
@@ -574,7 +599,7 @@ public class GemEquipmentModel : IHostedService
     }
 
     private SecsMessage HandleS2F31(SecsMessage msg) =>
-        new SecsMessage(2, 32, "S2F32") { SecsItem = B(0) };
+        new SecsMessage(2, 32) { Name = "S2F32", SecsItem = B(0) };
 
     private SecsMessage HandleS2F33(SecsMessage msg)
     {
@@ -587,17 +612,17 @@ public class GemEquipmentModel : IHostedService
             }
             else
             {
-                foreach (var rptItem in rptList)
+                foreach (var rptItem in rptList.Items)
                 {
                     if (rptItem.Count < 2) continue;
                     var rptId  = rptItem[0].FirstValue<uint>();
-                    var vidList = rptItem[1].Select(i => i.FirstValue<uint>()).ToList();
+                    var vidList = rptItem[1].Items.Select(i => i.FirstValue<uint>()).ToList();
                     if (vidList.Count == 0) Reports.Remove(rptId);
                     else Reports[rptId] = new ReportDefinition(rptId, vidList);
                 }
             }
         }
-        return new SecsMessage(2, 34, "S2F34") { SecsItem = B(0) };
+        return new SecsMessage(2, 34) { Name = "S2F34", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS2F35(SecsMessage msg)
@@ -605,16 +630,16 @@ public class GemEquipmentModel : IHostedService
         byte lrack = 0;
         if (msg.SecsItem?.Count >= 2)
         {
-            foreach (var ceLink in msg.SecsItem[1])
+            foreach (var ceLink in msg.SecsItem[1].Items)
             {
                 if (ceLink.Count < 2) continue;
                 var ceid   = ceLink[0].FirstValue<uint>();
-                var rptIds = ceLink[1].Select(i => i.FirstValue<uint>()).ToList();
+                var rptIds = ceLink[1].Items.Select(i => i.FirstValue<uint>()).ToList();
                 if (!CollectionEvents.ContainsKey(ceid)) { lrack = 4; break; }
                 EventReportLinks[ceid] = rptIds;
             }
         }
-        return new SecsMessage(2, 36, "S2F36") { SecsItem = B(lrack) };
+        return new SecsMessage(2, 36) { Name = "S2F36", SecsItem = B(lrack) };
     }
 
     private SecsMessage HandleS2F37(SecsMessage msg)
@@ -623,7 +648,7 @@ public class GemEquipmentModel : IHostedService
         if (msg.SecsItem?.Count >= 2)
         {
             var enable   = msg.SecsItem[0].FirstValue<byte>() != 0;
-            var ceidList = msg.SecsItem[1].Select(i => i.FirstValue<uint>()).ToList();
+            var ceidList = msg.SecsItem[1].Items.Select(i => i.FirstValue<uint>()).ToList();
 
             if (ceidList.Count == 0)
                 foreach (var k in EnabledEvents.Keys.ToList()) EnabledEvents[k] = enable;
@@ -634,7 +659,7 @@ public class GemEquipmentModel : IHostedService
                     EnabledEvents[ceid] = enable;
                 }
         }
-        return new SecsMessage(2, 38, "S2F38") { SecsItem = B(erack) };
+        return new SecsMessage(2, 38) { Name = "S2F38", SecsItem = B(erack) };
     }
 
     private SecsMessage HandleS2F41(SecsMessage msg)
@@ -654,9 +679,9 @@ public class GemEquipmentModel : IHostedService
         };
 
         _ = SendCollectionEventAsync(7u); // CommandInitiated
-        return new SecsMessage(2, 42, "S2F42")
+        return new SecsMessage(2, 42)
         {
-            SecsItem = L(B(hcack), L())
+            Name = "S2F42", SecsItem = L(B(hcack), L())
         };
     }
 
@@ -703,13 +728,13 @@ public class GemEquipmentModel : IHostedService
     {
         if (msg.SecsItem?.Count >= 2)
         {
-            foreach (var limitItem in msg.SecsItem[1])
+            foreach (var limitItem in msg.SecsItem[1].Items)
             {
                 if (limitItem.Count < 2) continue;
                 var vid = limitItem[0].FirstValue<uint>();
                 var vla = new VariableLimitAttribute(vid);
                 uint idx = 0;
-                foreach (var lp in limitItem[1])
+                foreach (var lp in limitItem[1].Items)
                 {
                     var pair = new LimitPair { LimitId = idx++ };
                     if (lp.Count >= 2)
@@ -722,18 +747,18 @@ public class GemEquipmentModel : IHostedService
                 VariableLimits[vid] = vla;
             }
         }
-        return new SecsMessage(2, 46, "S2F46") { SecsItem = B(0) };
+        return new SecsMessage(2, 46) { Name = "S2F46", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS2F47(SecsMessage msg)
     {
         var vids = msg.SecsItem is { Count: > 0 }
-            ? msg.SecsItem.Select(i => i.FirstValue<uint>()).ToList()
+            ? msg.SecsItem.Items.Select(i => i.FirstValue<uint>()).ToList()
             : VariableLimits.Keys.ToList();
 
-        return new SecsMessage(2, 48, "S2F48")
+        return new SecsMessage(2, 48)
         {
-            SecsItem = L(vids.Select(vid =>
+            Name = "S2F48", SecsItem = L(vids.Select(vid =>
                 VariableLimits.TryGetValue(vid, out var vla)
                     ? L(U4(vid), B(0), L(vla.Limits.Select(lp =>
                         L(U4(lp.UpperCollectionEventId), U4(lp.LowerCollectionEventId)))))
@@ -751,7 +776,7 @@ public class GemEquipmentModel : IHostedService
         if (msg.SecsItem?.Count >= 2)
         {
             var enable = msg.SecsItem[0].FirstValue<byte>() != 0;
-            var alids  = msg.SecsItem[1].Select(i => i.FirstValue<uint>()).ToList();
+            var alids  = msg.SecsItem[1].Items.Select(i => i.FirstValue<uint>()).ToList();
             if (alids.Count == 0)
                 foreach (var a in Alarms.Values) a.IsEnabled = enable;
             else
@@ -761,18 +786,18 @@ public class GemEquipmentModel : IHostedService
                     alarm.IsEnabled = enable;
                 }
         }
-        return new SecsMessage(5, 4, "S5F4") { SecsItem = B(aeack) };
+        return new SecsMessage(5, 4) { Name = "S5F4", SecsItem = B(aeack) };
     }
 
     private SecsMessage HandleS5F5(SecsMessage msg)
     {
         var alids = msg.SecsItem is { Count: > 0 }
-            ? msg.SecsItem.Select(i => i.FirstValue<uint>()).ToList()
+            ? msg.SecsItem.Items.Select(i => i.FirstValue<uint>()).ToList()
             : Alarms.Keys.ToList();
 
-        return new SecsMessage(5, 6, "S5F6")
+        return new SecsMessage(5, 6)
         {
-            SecsItem = L(alids.Select(id =>
+            Name = "S5F6", SecsItem = L(alids.Select(id =>
                 Alarms.TryGetValue(id, out var a)
                     ? L(B((byte)a.Category), U4(a.AlarmId), A(a.AlarmText))
                     : L(B(0), U4(id), A(""))))
@@ -780,9 +805,9 @@ public class GemEquipmentModel : IHostedService
     }
 
     private SecsMessage HandleS5F7(SecsMessage msg) =>
-        new SecsMessage(5, 8, "S5F8")
+        new SecsMessage(5, 8)
         {
-            SecsItem = L(Alarms.Values.Where(a => a.IsEnabled)
+            Name = "S5F8", SecsItem = L(Alarms.Values.Where(a => a.IsEnabled)
                 .Select(a => L(B((byte)a.Category), U4(a.AlarmId), A(a.AlarmText))))
         };
 
@@ -794,9 +819,9 @@ public class GemEquipmentModel : IHostedService
     {
         var ceid = msg.SecsItem?.FirstValue<uint>() ?? 0;
         var reportItems = BuildReportItems(ceid);
-        return new SecsMessage(6, 16, "S6F16")
+        return new SecsMessage(6, 16)
         {
-            SecsItem = L(U4(0), U4(ceid), L(reportItems))
+            Name = "S6F16", SecsItem = L(U4(0), U4(ceid), L(reportItems))
         };
     }
 
@@ -818,9 +843,9 @@ public class GemEquipmentModel : IHostedService
                 reportItems.Add(L(U4(rptId), L(varItems)));
             }
         }
-        return new SecsMessage(6, 18, "S6F18")
+        return new SecsMessage(6, 18)
         {
-            SecsItem = L(U4(0), U4(ceid), L(reportItems))
+            Name = "S6F18", SecsItem = L(U4(0), U4(ceid), L(reportItems))
         };
     }
 
@@ -830,7 +855,7 @@ public class GemEquipmentModel : IHostedService
         var items = Reports.TryGetValue(rptId, out var rpt)
             ? rpt.VariableIds.Select(vid => BuildVariableValueItem(vid)).ToList()
             : new List<Item>();
-        return new SecsMessage(6, 20, "S6F20") { SecsItem = L(items) };
+        return new SecsMessage(6, 20) { Name = "S6F20", SecsItem = L(items) };
     }
 
     private List<Item> BuildReportItems(uint ceid)
@@ -857,7 +882,7 @@ public class GemEquipmentModel : IHostedService
             var text = msg.SecsItem[1].GetString();
             Log($"[TERMINAL TID={tid}] {text}");
         }
-        return new SecsMessage(10, 4, "S10F4") { SecsItem = B(0) };
+        return new SecsMessage(10, 4) { Name = "S10F4", SecsItem = B(0) };
     }
 
     private SecsMessage HandleS10F5(SecsMessage msg)
@@ -868,7 +893,7 @@ public class GemEquipmentModel : IHostedService
             for (int i = 1; i < msg.SecsItem.Count; i++)
                 Log($"[TERMINAL TID={tid}] {msg.SecsItem[i].GetString()}");
         }
-        return new SecsMessage(10, 6, "S10F6") { SecsItem = B(0) };
+        return new SecsMessage(10, 6) { Name = "S10F6", SecsItem = B(0) };
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -877,7 +902,7 @@ public class GemEquipmentModel : IHostedService
     private SecsMessage HandleUnknown(SecsMessage msg)
     {
         Log($"[WARN] 未実装 S{msg.S}F{msg.F}");
-        return new SecsMessage(9, 5, "S9F5") { SecsItem = B(new byte[] { msg.S, msg.F }) };
+        return new SecsMessage(9, 5) { Name = "S9F5", SecsItem = B(new byte[] { msg.S, msg.F }) };
     }
 
     // ─────────────────────────────────────────────────────────────
