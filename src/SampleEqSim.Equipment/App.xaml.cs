@@ -8,7 +8,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Secs4Net;
 using SampleEqSim.Core.Gem;
-using SampleEqSim.Core.Secs;
 using SampleEqSim.Equipment.ViewModels;
 using SampleEqSim.Equipment.Views;
 
@@ -43,7 +42,9 @@ public partial class App : Application
             })
             .ConfigureServices((context, services) =>
             {
-                services.AddSingleton<ISecsGem, NoopSecsGem>();
+                // secs4net 実スタック (ISecsConnection=HsmsConnection / ISecsGem=SecsGem) を登録。
+                // appsettings.json の "secs4net" セクションをバインドし、Passive で待受ける。
+                services.AddSecs4Net<DeviceLogger>(context.Configuration);
 
                 // GemEquipmentModel: シングルトン + IHostedService として両方登録
                 services.AddSingleton<GemEquipmentModel>(sp =>
