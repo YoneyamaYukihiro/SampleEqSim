@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Secs4Net;
 using SampleEqSim.Core.Config;
+using SampleEqSim.Core.Sequence;
 using SampleEqSim.Host.Services;
 using static Secs4Net.Item;
 
@@ -59,12 +60,20 @@ public partial class HostViewModel : ObservableObject
     /// <summary>ヘッダーに表示する現在の接続設定サマリ</summary>
     [ObservableProperty] private string _connectionSummary = "";
 
+    // ── シーケンス監視 ────────────────────────────────────────────
+    private SequenceMonitor _seqMonitor = null!;
+    public ObservableCollection<SequenceStepViewModel> SequenceSteps { get; } = new();
+    [ObservableProperty] private string _sequenceName = "";
+    [ObservableProperty] private string _sequenceStatus = "";
+    [ObservableProperty] private string _sequenceStatusBrush = "LedGray";
+
     private readonly DispatcherTimer _clockTimer;
 
     public HostViewModel(ISecsGem secsGem, HostGemService hostGemService)
     {
         _secsGem = secsGem;
         LoadConnectionSettings();
+        InitSequenceMonitor();
 
         // HostGemService 経由でイベント購読
         hostGemService.ConnectionChanged += (_, state) =>
@@ -119,6 +128,51 @@ public partial class HostViewModel : ObservableObject
     }
 
     // ─────────────────────────────────────────────────────────────
+    // シーケンス監視 (sequence.json の想定順序と実通信を照合)
+    // ─────────────────────────────────────────────────────────────
+    private void InitSequenceMonitor()
+    {
+        _seqMonitor = new SequenceMonitor(SequenceLoader.Load());
+        SequenceSteps.Clear();
+        foreach (var step in _seqMonitor.Steps)
+            SequenceSteps.Add(new SequenceStepViewModel(step.Sf, step.Desc));
+        SequenceName = _seqMonitor.Name;
+        RefreshSequence();
+    }
+
+    /// <summary>送受信したメッセージを監視器に投入 (UIスレッドで実行)。</summary>
+    private void ObserveSeq(byte s, byte f)
+        => App.Current.Dispatcher.Invoke(() => { _seqMonitor.Observe(s, f); RefreshSequence(); });
+
+    private void RefreshSequence()
+    {
+        for (int i = 0; i < SequenceSteps.Count && i < _seqMonitor.Steps.Count; i++)
+        {
+            var m  = _seqMonitor.Steps[i];
+            var vm = SequenceSteps[i];
+            vm.StatusBrush = m.Status switch
+            {
+                StepStatus.Done    => "LedGreen",
+                StepStatus.Active  => "LedYellow",
+                StepStatus.Skipped => "LedRed",
+                _                  => "LedGray",
+            };
+            vm.Detail = m.Status switch
+            {
+                StepStatus.Done    => $"✓ {m.TimeText}",
+                StepStatus.Active  => "← 次に期待",
+                StepStatus.Skipped => "⚠ スキップ",
+                _                  => "未到達",
+            };
+        }
+        SequenceStatus      = _seqMonitor.Summary;
+        SequenceStatusBrush = _seqMonitor.SummaryBrush;
+    }
+
+    [RelayCommand] private void ReloadSequence() => InitSequenceMonitor();
+    [RelayCommand] private void ResetSequence() { _seqMonitor.Reset(); RefreshSequence(); }
+
+    // ─────────────────────────────────────────────────────────────
     // 接続状態変化
     // ─────────────────────────────────────────────────────────────
     private void OnConnectionChanged(ConnectionState state)
@@ -142,6 +196,7 @@ public partial class HostViewModel : ObservableObject
         var msg = e.PrimaryMessage;
         App.Current.Dispatcher.Invoke(() =>
             AddLog($"RCV << S{msg.S}F{msg.F} ", MsgLevel.Receive));
+        ObserveSeq(msg.S, msg.F);
 
         SecsMessage? reply = (msg.S, msg.F) switch
         {
@@ -157,6 +212,7 @@ public partial class HostViewModel : ObservableObject
         {
             App.Current.Dispatcher.Invoke(() =>
                 AddLog($"SND >> S{reply.S}F{reply.F} {reply.Name}", MsgLevel.Send));
+            ObserveSeq(reply.S, reply.F);
             await e.TryReplyAsync(reply);
         }
     }
@@ -575,8 +631,9 @@ public partial class HostViewModel : ObservableObject
         try
         {
             AddLog($"SND >> S{msg.S}F{msg.F} ", MsgLevel.Send);
+            ObserveSeq(msg.S, msg.F);
             var reply = await _secsGem.SendAsync(msg);
-            if (reply != null) AddLog($"RCV << S{reply.S}F{reply.F} ", MsgLevel.Receive);
+            if (reply != null) { AddLog($"RCV << S{reply.S}F{reply.F} ", MsgLevel.Receive); ObserveSeq(reply.S, reply.F); }
             if (onReplyAsync != null) await onReplyAsync(reply);
         }
         catch (Exception ex) { AddLog($"[ERR] {ex.Message}", MsgLevel.Error); }
@@ -592,9 +649,13 @@ public partial class HostViewModel : ObservableObject
         try
         {
             AddLog($"SND >> S{msg.S}F{msg.F} ", MsgLevel.Send);
+            ObserveSeq(msg.S, msg.F);
             var reply = await _secsGem.SendAsync(msg);
             if (reply != null)
+            {
                 AddLog($"RCV << S{reply.S}F{reply.F} ", MsgLevel.Receive);
+                ObserveSeq(reply.S, reply.F);
+            }
             onReply?.Invoke(reply);
         }
         catch (Exception ex)

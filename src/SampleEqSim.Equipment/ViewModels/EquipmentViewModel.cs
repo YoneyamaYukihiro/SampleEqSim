@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SampleEqSim.Core.Config;
 using SampleEqSim.Core.Gem;
+using SampleEqSim.Core.Sequence;
 
 namespace SampleEqSim.Equipment.ViewModels;
 
@@ -55,10 +56,19 @@ public partial class EquipmentViewModel : ObservableObject
     /// <summary>ヘッダーに表示する現在の接続設定サマリ</summary>
     [ObservableProperty] private string _connectionSummary = "";
 
+    // ── シーケンス監視 ────────────────────────────────────────────
+    private SequenceMonitor _seqMonitor = null!;
+    public ObservableCollection<SequenceStepViewModel> SequenceSteps { get; } = new();
+    [ObservableProperty] private string _sequenceName = "";
+    [ObservableProperty] private string _sequenceStatus = "";
+    [ObservableProperty] private string _sequenceStatusBrush = "LedGray";
+
     public EquipmentViewModel(GemEquipmentModel model)
     {
         _model = model;
         LoadConnectionSettings();
+        InitSequenceMonitor();
+        model.MessageObserved += (s, f) => App.Current.Dispatcher.Invoke(() => OnMessageObserved(s, f));
 
         // アラームビューモデルを初期化
         foreach (var alarm in model.Alarms.Values)
@@ -135,6 +145,53 @@ public partial class EquipmentViewModel : ObservableObject
         ConnectionSettingsUtil.StartNewInstance();
         App.Current.Shutdown();
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // シーケンス監視 (sequence.json の想定順序と実通信を照合)
+    // ─────────────────────────────────────────────────────────────
+    private void InitSequenceMonitor()
+    {
+        _seqMonitor = new SequenceMonitor(SequenceLoader.Load());
+        SequenceSteps.Clear();
+        foreach (var step in _seqMonitor.Steps)
+            SequenceSteps.Add(new SequenceStepViewModel(step.Sf, step.Desc));
+        SequenceName = _seqMonitor.Name;
+        RefreshSequence();
+    }
+
+    private void OnMessageObserved(byte s, byte f)
+    {
+        _seqMonitor.Observe(s, f);
+        RefreshSequence();
+    }
+
+    private void RefreshSequence()
+    {
+        for (int i = 0; i < SequenceSteps.Count && i < _seqMonitor.Steps.Count; i++)
+        {
+            var m  = _seqMonitor.Steps[i];
+            var vm = SequenceSteps[i];
+            vm.StatusBrush = m.Status switch
+            {
+                StepStatus.Done    => "LedGreen",
+                StepStatus.Active  => "LedYellow",
+                StepStatus.Skipped => "LedRed",
+                _                  => "LedGray",
+            };
+            vm.Detail = m.Status switch
+            {
+                StepStatus.Done    => $"✓ {m.TimeText}",
+                StepStatus.Active  => "← 次に期待",
+                StepStatus.Skipped => "⚠ スキップ",
+                _                  => "未到達",
+            };
+        }
+        SequenceStatus      = _seqMonitor.Summary;
+        SequenceStatusBrush = _seqMonitor.SummaryBrush;
+    }
+
+    [RelayCommand] private void ReloadSequence() => InitSequenceMonitor();
+    [RelayCommand] private void ResetSequence() { _seqMonitor.Reset(); RefreshSequence(); }
 
     // ─────────────────────────────────────────────────────────────
     // 状態更新

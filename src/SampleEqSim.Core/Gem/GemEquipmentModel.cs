@@ -54,6 +54,8 @@ public class GemEquipmentModel : IHostedService
     public event EventHandler<(uint AlarmId, bool IsSet)>? AlarmStateChanged;
     /// <summary>レシピ追加/更新/削除時に発火 (PpId, deleted)</summary>
     public event EventHandler<(string PpId, bool Deleted)>? ProcessProgramChanged;
+    /// <summary>送受信したメッセージを時系列で通知 (S, F)。シーケンス監視用。</summary>
+    public event Action<byte, byte>? MessageObserved;
     /// <summary>ポート状態変化 (PortId)</summary>
     public event EventHandler<uint>? PortStateChanged;
     /// <summary>キャリア状態変化 (CarrierId)</summary>
@@ -428,6 +430,7 @@ public class GemEquipmentModel : IHostedService
     {
         var msg = e.PrimaryMessage;
         Log($"RCV << S{msg.S}F{msg.F} ");
+        MessageObserved?.Invoke(msg.S, msg.F);
 
         try
         {
@@ -472,6 +475,7 @@ public class GemEquipmentModel : IHostedService
             if (msg.ReplyExpected && reply != null)
             {
                 Log($"SND >> S{reply.S}F{reply.F} {reply.Name}");
+                MessageObserved?.Invoke(reply.S, reply.F);
                 await e.TryReplyAsync(reply);
             }
         }

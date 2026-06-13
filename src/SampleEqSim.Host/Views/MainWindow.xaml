@@ -127,6 +127,48 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <!-- シーケンス監視 -->
+                    <GroupBox Header="シーケンス監視 (想定順序との照合)" Margin="0,0,0,6" Padding="6">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center"
+                                             Fill="{Binding SequenceStatusBrush, Converter={StaticResource LedBrush}}"/>
+                                    <TextBlock Text="{Binding SequenceName}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="再読込"  Style="{StaticResource Btn}" Command="{Binding ReloadSequenceCommand}"/>
+                                <Button Grid.Column="2" Content="リセット" Style="{StaticResource Btn}" Command="{Binding ResetSequenceCommand}"/>
+                            </Grid>
+                            <TextBlock Text="{Binding SequenceStatus}" FontSize="11" Margin="0,0,0,4"
+                                       Foreground="{Binding SequenceStatusBrush, Converter={StaticResource LedBrush}}"/>
+                            <ItemsControl ItemsSource="{Binding SequenceSteps}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Width="11" Height="11" Margin="2,0,6,0" VerticalAlignment="Center"
+                                                     Fill="{Binding StatusBrush, Converter={StaticResource LedBrush}}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="10" Foreground="#64748B"
+                                                       VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="※ sequence.json (exe同フォルダ) の順序と実通信を照合。緑=受信 / 黄=次に期待 / 赤=スキップ・逸脱"
+                                       FontSize="10" Foreground="#64748B" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+
                     <!-- 接続管理 (Stream 1) -->
                     <GroupBox Header="接続管理 (Stream 1)" Margin="0,0,0,6" Padding="6">
                         <StackPanel>
