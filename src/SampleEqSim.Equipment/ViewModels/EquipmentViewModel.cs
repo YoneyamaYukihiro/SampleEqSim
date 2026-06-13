@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SampleEqSim.Core.Config;
 using SampleEqSim.Core.Gem;
 
 namespace SampleEqSim.Equipment.ViewModels;
@@ -46,9 +47,18 @@ public partial class EquipmentViewModel : ObservableObject
     // ── 時刻表示 ──────────────────────────────────────────────────
     [ObservableProperty] private string _currentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
+    // ── 接続設定 (HSMS) ───────────────────────────────────────────
+    [ObservableProperty] private bool   _connIsActive;
+    [ObservableProperty] private string _connIpAddress = "0.0.0.0";
+    [ObservableProperty] private string _connPort      = "5000";
+    [ObservableProperty] private string _connDeviceId  = "0";
+    /// <summary>ヘッダーに表示する現在の接続設定サマリ</summary>
+    [ObservableProperty] private string _connectionSummary = "";
+
     public EquipmentViewModel(GemEquipmentModel model)
     {
         _model = model;
+        LoadConnectionSettings();
 
         // アラームビューモデルを初期化
         foreach (var alarm in model.Alarms.Values)
@@ -83,6 +93,47 @@ public partial class EquipmentViewModel : ObservableObject
             }
         };
         _uiUpdateTimer.Start();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 接続設定 (appsettings.json への保存 + 再起動で反映)
+    // ─────────────────────────────────────────────────────────────
+    private void LoadConnectionSettings()
+    {
+        var s = AppSettingsService.Load();
+        ConnIsActive  = s.IsActive;
+        ConnIpAddress = s.IpAddress;
+        ConnPort      = s.Port.ToString();
+        ConnDeviceId  = s.DeviceId.ToString();
+        ConnectionSummary = ConnectionSettingsUtil.Summarize(s);
+    }
+
+    [RelayCommand]
+    private void SaveAndReconnect()
+    {
+        if (!ConnectionSettingsUtil.TryBuild(
+                ConnIsActive, ConnIpAddress, ConnPort, ConnDeviceId,
+                out var settings, out var error))
+        {
+            MessageBox.Show(error, "入力エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (MessageBox.Show(ConnectionSettingsUtil.ConfirmMessage(settings),
+                "接続設定の保存と再起動", MessageBoxButton.OKCancel, MessageBoxImage.Question)
+            != MessageBoxResult.OK)
+            return;
+
+        try { AppSettingsService.Save(settings); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"設定の保存に失敗しました。\n{ex.Message}",
+                "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        ConnectionSettingsUtil.StartNewInstance();
+        App.Current.Shutdown();
     }
 
     // ─────────────────────────────────────────────────────────────

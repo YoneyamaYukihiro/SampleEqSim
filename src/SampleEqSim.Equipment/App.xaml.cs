@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Secs4Net;
+using SampleEqSim.Core.Config;
 using SampleEqSim.Core.Gem;
 using SampleEqSim.Equipment.ViewModels;
 using SampleEqSim.Equipment.Views;
@@ -34,6 +35,11 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 「保存して再接続」による再起動時は、旧プロセスがポート (5000) を
+        // 解放するまで少し待ってから HsmsConnection を Bind する。
+        if (Array.IndexOf(e.Args, ConnectionSettingsUtil.RestartArg) >= 0)
+            await Task.Delay(1500);
 
         _host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config =>

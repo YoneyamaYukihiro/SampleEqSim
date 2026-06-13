@@ -47,8 +47,12 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="⚙ EQUIPMENT 装置シミュレータ  (Passive / Port 5000)"
-                           FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="⚙ EQUIPMENT 装置シミュレータ  "
+                               FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ConnectionSummary}"
+                               FontSize="13" Foreground="#A7F3D0" VerticalAlignment="Center"/>
+                </StackPanel>
                 <TextBlock Grid.Column="1" Text="{Binding CurrentTime}"
                            FontSize="13" Foreground="#94A3B8" VerticalAlignment="Center"/>
             </Grid>
@@ -91,6 +95,38 @@
             <!-- 左パネル: 操作 -->
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,8,0">
             <StackPanel>
+
+                <!-- 接続設定 (HSMS) -->
+                <GroupBox Header="接続設定 (HSMS)" Style="{StaticResource GroupBoxStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="78"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="IPアドレス" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" Margin="4,2" Padding="4,2"
+                                       Text="{Binding ConnIpAddress, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="ポート" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" Margin="4,2" Padding="4,2"
+                                       Text="{Binding ConnPort, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="DeviceId" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" Margin="4,2" Padding="4,2"
+                                       Text="{Binding ConnDeviceId, UpdateSourceTrigger=PropertyChanged}"/>
+                        </Grid>
+                        <CheckBox Content="Active モード (自分から相手へ接続する)" Margin="4,4"
+                                  IsChecked="{Binding ConnIsActive}"/>
+                        <TextBlock Text="※ Passive は待受 (IP=0.0.0.0 で全NIC)。保存すると確認後にアプリを再起動して反映します。"
+                                   FontSize="10" Foreground="#64748B" TextWrapping="Wrap" Margin="4,0"/>
+                        <Button Content="保存して再接続 (再起動)" Style="{StaticResource Btn}" Margin="4,4,4,0"
+                                Command="{Binding SaveAndReconnectCommand}"/>
+                    </StackPanel>
+                </GroupBox>
 
                 <!-- 処理状態操作 -->
                 <GroupBox Header="処理状態 (Processing State)" Style="{StaticResource GroupBoxStyle}">

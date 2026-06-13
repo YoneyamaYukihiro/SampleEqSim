@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Secs4Net;
+using SampleEqSim.Core.Config;
 using SampleEqSim.Host.Services;
 using SampleEqSim.Host.ViewModels;
 using SampleEqSim.Host.Views;
@@ -34,6 +34,10 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 「保存して再接続」による再起動時は、旧プロセスの解放を待ってから接続する。
+        if (Array.IndexOf(e.Args, ConnectionSettingsUtil.RestartArg) >= 0)
+            await Task.Delay(1500);
 
         _host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config =>
