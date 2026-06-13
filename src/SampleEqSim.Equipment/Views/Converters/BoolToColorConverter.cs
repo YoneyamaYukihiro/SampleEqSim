@@ -40,3 +40,16 @@ public class StringToLedBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => DependencyProperty.UnsetValue;
 }
+
+/// <summary>16進カラー文字列 (#RRGGBB) → SolidColorBrush。ログ行の色分け用。</summary>
+public class StringToForegroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(value?.ToString() ?? "#E2E8F0")); }
+        catch { return new SolidColorBrush(Colors.White); }
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => DependencyProperty.UnsetValue;
+}

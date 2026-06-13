@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:SampleEqSim.Equipment.ViewModels"
         xmlns:conv="clr-namespace:SampleEqSim.Equipment.Views.Converters"
+        xmlns:v="clr-namespace:SampleEqSim.Equipment.Views"
         mc:Ignorable="d"
         Title="SECS/GEM Equipment Simulator [装置]" Height="780" Width="1100"
         Icon="pack://application:,,,/equipment.ico"
@@ -13,6 +14,7 @@
     <Window.Resources>
         <conv:BoolToAlarmColorConverter x:Key="BoolToAlarmColor"/>
         <conv:StringToLedBrushConverter x:Key="LedBrush"/>
+        <conv:StringToForegroundConverter x:Key="FgConverter"/>
 
         <Style x:Key="LedIndicator" TargetType="Ellipse">
             <Setter Property="Width" Value="14"/>
@@ -88,12 +90,14 @@
         <!-- メインコンテンツ -->
         <Grid Margin="8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 左パネル: 操作 -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,8,0">
+            <!-- 左パネル: 操作 (タブ化) -->
+            <TabControl Grid.Column="0" Margin="0,0,8,0">
+            <TabItem Header="接続">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
                 <!-- 接続設定 (HSMS) -->
@@ -170,6 +174,14 @@
                     </StackPanel>
                 </GroupBox>
 
+                </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="運転">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
                 <!-- 処理状態操作 -->
                 <GroupBox Header="処理状態 (Processing State)" Style="{StaticResource GroupBoxStyle}">
                     <UniformGrid Rows="2" Columns="3">
@@ -227,6 +239,14 @@
                     </StackPanel>
                 </GroupBox>
 
+                </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="レシピ/アラーム">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
                 <!-- レシピ管理 -->
                 <GroupBox Header="レシピ管理 (Process Program / S7)" Style="{StaticResource GroupBoxStyle}">
                     <StackPanel>
@@ -276,11 +296,19 @@
                     </StackPanel>
                 </GroupBox>
 
+                </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="E87 ポート/キャリア">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
                 <!-- ポート管理 -->
                 <GroupBox Header="ポート管理 (Load Port / E87)" Style="{StaticResource GroupBoxStyle}">
                     <StackPanel>
                         <DataGrid ItemsSource="{Binding PortList}" AutoGenerateColumns="False"
-                                  CanUserAddRows="False" Height="80" FontSize="11"
+                                  CanUserAddRows="False" Height="150" FontSize="11"
                                   IsReadOnly="True" GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="ID"         Binding="{Binding PortId}"    Width="30"/>
@@ -297,7 +325,7 @@
                 <GroupBox Header="キャリア管理 (Carrier / E87)" Style="{StaticResource GroupBoxStyle}">
                     <StackPanel>
                         <DataGrid ItemsSource="{Binding CarrierList}" AutoGenerateColumns="False"
-                                  CanUserAddRows="False" Height="70" FontSize="11"
+                                  CanUserAddRows="False" Height="130" FontSize="11"
                                   IsReadOnly="True" GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="キャリアID" Binding="{Binding CarrierId}" Width="90"/>
@@ -305,40 +333,39 @@
                                 <DataGridTextColumn Header="状態"       Binding="{Binding State}"     Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <!-- キャリアロード操作 -->
-                        <Grid Margin="0,4,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="ID:" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <TextBox   Grid.Column="1" Text="{Binding LoadCarrierId, UpdateSourceTrigger=PropertyChanged}"
-                                       Padding="3,2" FontSize="11"/>
-                            <TextBlock Grid.Column="2" Text=" P:" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Column="3" Text="{Binding LoadPortIdStr, UpdateSourceTrigger=PropertyChanged}"
-                                       Width="25" Padding="3,2" FontSize="11"/>
-                        </Grid>
-                        <!-- アンロード操作 -->
-                        <Grid Margin="0,4,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" Content="ロード" Style="{StaticResource Btn}"
-                                    Command="{Binding LoadCarrierCommand}"/>
-                            <Button Grid.Column="1" Content="アンロード P:" Style="{StaticResource Btn}"
-                                    Command="{Binding UnloadCarrierCommand}"/>
-                            <TextBox Grid.Column="2" Text="{Binding UnloadPortIdStr, UpdateSourceTrigger=PropertyChanged}"
-                                     Padding="3,2" FontSize="11" VerticalAlignment="Center"/>
-                        </Grid>
+                        <!-- ポートごとのキャリア ロード/アンロード -->
+                        <TextBlock Text="ポートごとに キャリアID を入力してロード:" FontSize="10"
+                                   Foreground="#64748B" Margin="0,6,0,2"/>
+                        <ItemsControl ItemsSource="{Binding PortLoadRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding PortLabel}" Width="48"
+                                                   VerticalAlignment="Center" FontSize="11"/>
+                                        <TextBox   Grid.Column="1" Margin="2,0" Padding="3,2" FontSize="11"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding CarrierIdInput, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <Button Grid.Column="2" Content="ロード"     Style="{StaticResource Btn}"
+                                                Command="{Binding LoadCommand}"/>
+                                        <Button Grid.Column="3" Content="アンロード" Style="{StaticResource Btn}"
+                                                Command="{Binding UnloadCommand}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </GroupBox>
 
             </StackPanel>
             </ScrollViewer>
+            </TabItem>
+            </TabControl>
 
             <!-- 右パネル: ログ -->
             <Grid Grid.Column="1">
@@ -359,24 +386,40 @@
                 </Grid>
 
                 <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
-                    <ListBox ItemsSource="{Binding MessageLog}"
-                             FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
-                             Background="#0F172A" Foreground="#E2E8F0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                             VirtualizingPanel.IsVirtualizing="True"
-                             VirtualizingPanel.VirtualizationMode="Recycling">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="4,1"/>
-                                <Setter Property="FontFamily" Value="Consolas, MS Gothic, Meiryo"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding}" Value="">
-                                        <Setter Property="Height" Value="0"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
+                    <ListView ItemsSource="{Binding MessageLog}"
+                              v:AutoScroll.ToEnd="True"
+                              FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
+                              Background="#0F172A"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="時刻" Width="85">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding TimeText}" Foreground="#94A3B8" FontSize="10"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="メッセージ" Width="600">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Message}"
+                                                       Foreground="{Binding ForegroundColor, Converter={StaticResource FgConverter}}"
+                                                       FontSize="11"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Padding" Value="2,1"/>
                             </Style>
-                        </ListBox.ItemContainerStyle>
-                    </ListBox>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
                 </Border>
             </Grid>
         </Grid>

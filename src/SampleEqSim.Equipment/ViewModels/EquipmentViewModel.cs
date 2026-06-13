@@ -34,15 +34,14 @@ public partial class EquipmentViewModel : ObservableObject
     // ── ポート/キャリア ───────────────────────────────────────────
     public ObservableCollection<PortViewModel>    PortList    { get; } = new();
     public ObservableCollection<CarrierViewModel> CarrierList { get; } = new();
-    [ObservableProperty] private string _loadCarrierId   = "CARRIER001";
-    [ObservableProperty] private string _loadPortIdStr   = "1";
-    [ObservableProperty] private string _unloadPortIdStr = "1";
+    /// <summary>ポートごとのキャリア ロード/アンロード 操作行 (ポート数分)</summary>
+    public ObservableCollection<PortLoadViewModel> PortLoadRows { get; } = new();
 
     // ── アラーム ──────────────────────────────────────────────────
     public ObservableCollection<AlarmViewModel> AlarmList { get; } = new();
 
     // ── ログ ──────────────────────────────────────────────────────
-    public ObservableCollection<string> MessageLog { get; } = new();
+    public ObservableCollection<LogEntry> MessageLog { get; } = new();
     private const int MaxLogLines = 1000;
 
     // ── 時刻表示 ──────────────────────────────────────────────────
@@ -84,9 +83,12 @@ public partial class EquipmentViewModel : ObservableObject
         model.PortStateChanged      += (_, portId)    => App.Current.Dispatcher.Invoke(() => RefreshPort(portId));
         model.CarrierStateChanged   += (_, carrierId) => App.Current.Dispatcher.Invoke(() => RefreshCarrier(carrierId));
 
-        // ポートの初期表示
-        foreach (var port in model.Ports.Values)
+        // ポートの初期表示 + ポートごとのキャリア操作行
+        foreach (var port in model.Ports.Values.OrderBy(p => p.PortId))
+        {
             PortList.Add(new PortViewModel(port));
+            PortLoadRows.Add(new PortLoadViewModel(model, port.PortId, $"CARRIER{port.PortId:000}"));
+        }
 
         // UI更新タイマー (1秒ごと)
         _uiUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -284,9 +286,22 @@ public partial class EquipmentViewModel : ObservableObject
 
     private void AddLog(string message)
     {
-        MessageLog.Insert(0, message);
+        MessageLog.Add(new LogEntry(DateTime.Now, message, ClassifyLog(message))); // 末尾追記 (上=古い / 下=新しい)
         while (MessageLog.Count > MaxLogLines)
-            MessageLog.RemoveAt(MessageLog.Count - 1);
+            MessageLog.RemoveAt(0);                                  // 上限超過は先頭(古い)から削除
+    }
+
+    /// <summary>
+    /// ログ文字列から表示レベル(色)を判定する。
+    /// 先頭にタイムスタンプ "[HH:mm:ss.fff] " が付くため StartsWith ではなく Contains で判定する。
+    /// </summary>
+    private static MsgLevel ClassifyLog(string m)
+    {
+        if (m.Contains("RCV <<")) return MsgLevel.Receive;
+        if (m.Contains("ALARM"))  return MsgLevel.Alarm;   // S5F1 ALARM SET/CLR 等
+        if (m.Contains("SND >>")) return MsgLevel.Send;
+        if (m.Contains("[ERR]") || m.Contains("[WARN]")) return MsgLevel.Error;
+        return MsgLevel.System;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -361,23 +376,66 @@ public partial class EquipmentViewModel : ObservableObject
 
     [RelayCommand]
     private void ClearLog() => MessageLog.Clear();
+}
 
-    // ─────────────────────────────────────────────────────────────
-    // コマンド: キャリアロード/アンロード
-    // ─────────────────────────────────────────────────────────────
-    [RelayCommand]
-    private async Task LoadCarrier()
+// ─────────────────────────────────────────────────────────────
+// ポートごとのキャリア ロード/アンロード 操作行
+// ─────────────────────────────────────────────────────────────
+public partial class PortLoadViewModel : ObservableObject
+{
+    private readonly GemEquipmentModel _model;
+    public uint   PortId    { get; }
+    public string PortLabel => $"Port {PortId}";
+
+    /// <summary>このポートにロードするキャリアID (入力欄)</summary>
+    [ObservableProperty] private string _carrierIdInput;
+
+    public PortLoadViewModel(GemEquipmentModel model, uint portId, string defaultCarrierId)
     {
-        if (!uint.TryParse(LoadPortIdStr, out var portId) || string.IsNullOrWhiteSpace(LoadCarrierId)) return;
-        await _model.LoadCarrierAsync(portId, LoadCarrierId.Trim());
+        _model = model;
+        PortId = portId;
+        _carrierIdInput = defaultCarrierId;
     }
 
     [RelayCommand]
-    private async Task UnloadCarrier()
+    private async Task Load()
     {
-        if (!uint.TryParse(UnloadPortIdStr, out var portId)) return;
-        await _model.UnloadCarrierAsync(portId);
+        if (string.IsNullOrWhiteSpace(CarrierIdInput)) return;
+        await _model.LoadCarrierAsync(PortId, CarrierIdInput.Trim());
     }
+
+    [RelayCommand]
+    private async Task Unload() => await _model.UnloadCarrierAsync(PortId);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 通信ログエントリ (色分け表示用)
+// ─────────────────────────────────────────────────────────────
+public enum MsgLevel { System, Send, Receive, Alarm, Error }
+
+public class LogEntry
+{
+    public DateTime Time    { get; }
+    public string   Message { get; }
+    public MsgLevel Level   { get; }
+    public string   TimeText => Time.ToString("HH:mm:ss.fff");
+
+    public LogEntry(DateTime time, string message, MsgLevel level)
+    {
+        Time = time;
+        Message = message;
+        Level = level;
+    }
+
+    /// <summary>レベル別の文字色 (Host 側と同配色)。</summary>
+    public string ForegroundColor => Level switch
+    {
+        MsgLevel.Send    => "#60A5FA", // 青: 送信
+        MsgLevel.Receive => "#4ADE80", // 緑: 受信
+        MsgLevel.Alarm   => "#F87171", // 赤: アラーム
+        MsgLevel.Error   => "#FB923C", // 橙: エラー/警告
+        _                => "#E2E8F0", // 既定: システム
+    };
 }
 
 // ─────────────────────────────────────────────────────────────

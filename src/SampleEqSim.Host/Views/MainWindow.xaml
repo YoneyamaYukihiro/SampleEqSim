@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:conv="clr-namespace:SampleEqSim.Host.Views.Converters"
+        xmlns:v="clr-namespace:SampleEqSim.Host.Views"
         mc:Ignorable="d"
         Title="SECS/GEM Host Simulator [ホスト]" Height="800" Width="1150"
         Icon="pack://application:,,,/host.ico"
@@ -87,12 +88,14 @@
         <!-- メインコンテンツ -->
         <Grid Margin="8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 左パネル: コマンド -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,8,0">
+            <!-- 左パネル: コマンド (タブ化) -->
+            <TabControl Grid.Column="0" Margin="0,0,8,0">
+                <TabItem Header="接続">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
                     <!-- 接続設定 (HSMS) -->
@@ -183,6 +186,14 @@
                         </StackPanel>
                     </GroupBox>
 
+                </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="制御/収集">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
                     <!-- 装置制御 (Stream 2) -->
                     <GroupBox Header="装置制御 (Stream 2)" Margin="0,0,0,6" Padding="6">
                         <StackPanel>
@@ -242,6 +253,14 @@
                         </StackPanel>
                     </GroupBox>
 
+                </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="レシピ/アラーム">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
                     <!-- レシピ管理 (Stream 7) -->
                     <GroupBox Header="レシピ管理 (Process Program / S7)" Margin="0,0,0,6" Padding="6">
                         <StackPanel>
@@ -276,6 +295,14 @@
                         </StackPanel>
                     </GroupBox>
 
+                </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="E87 ポート/キャリア">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
                     <!-- ポート/キャリア管理 (Stream 14 / E87) -->
                     <GroupBox Header="ポート/キャリア管理 (S14 / E87)" Margin="0,0,0,6" Padding="6">
                         <StackPanel>
@@ -296,7 +323,9 @@
                     </GroupBox>
 
                 </StackPanel>
-            </ScrollViewer>
+                </ScrollViewer>
+                </TabItem>
+            </TabControl>
 
             <!-- 右パネル: ログ + イベントログ -->
             <Grid Grid.Column="1">
@@ -319,6 +348,7 @@
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
                         <ListView ItemsSource="{Binding MessageLog}"
+                                  v:AutoScroll.ToEnd="True"
                                   FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
                                   Background="#0F172A"
                                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -368,6 +398,7 @@
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
                         <ListBox ItemsSource="{Binding EventLog}"
+                                 v:AutoScroll.ToEnd="True"
                                  FontFamily="Consolas, MS Gothic, Meiryo" FontSize="11"
                                  Background="#1E293B" Foreground="#FCD34D"
                                  VirtualizingPanel.IsVirtualizing="True"/>

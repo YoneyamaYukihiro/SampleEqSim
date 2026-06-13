@@ -205,8 +205,8 @@ public class GemEquipmentModel : IHostedService
             EnabledEvents[ceid] = true;
 
         // ── Load Ports (E87) ──
-        Ports[1] = new LoadPort(1, "LP1") { State = PortState.ReadyToLoad };
-        Ports[2] = new LoadPort(2, "LP2") { State = PortState.ReadyToLoad };
+        for (uint p = 1; p <= 5; p++)
+            Ports[p] = new LoadPort(p, $"LP{p}") { State = PortState.ReadyToLoad };
 
         // ── Alarms (ALID) ──
         Alarms[1] = new AlarmDefinition(1, "LOW_AIR", "低圧縮空気検出", AlarmCategory.Fault);
@@ -1214,6 +1214,7 @@ public class GemEquipmentModel : IHostedService
     private void Log(string message)
     {
         _logger.LogInformation("{Message}", message);
-        MessageLogged?.Invoke(this, $"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+        // 時刻は ViewModel 側で付与する (Host と同じく時刻を別列で表示するため、ここでは素のメッセージのみ)
+        MessageLogged?.Invoke(this, message);
     }
 }

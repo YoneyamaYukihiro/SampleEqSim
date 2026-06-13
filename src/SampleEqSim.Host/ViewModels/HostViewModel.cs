@@ -228,9 +228,9 @@ public partial class HostViewModel : ObservableObject
             App.Current.Dispatcher.Invoke(() =>
             {
                 var ev = $"[ALARM {(isSet ? "SET" : "CLR")}] ALID={alid} {alTx}";
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {ev}");
+                EventLog.Add($"[{DateTime.Now:HH:mm:ss}] {ev}");
                 AddLog(ev, isSet ? MsgLevel.Alarm : MsgLevel.System);
-                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+                while (EventLog.Count > 200) EventLog.RemoveAt(0);
             });
         }
         return new SecsMessage(5, 2, false) { SecsItem = B(0) };
@@ -243,8 +243,8 @@ public partial class HostViewModel : ObservableObject
             var ceid = msg.SecsItem[1].FirstValue<uint>();
             App.Current.Dispatcher.Invoke(() =>
             {
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] [EVENT] CEID={ceid}");
-                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+                EventLog.Add($"[{DateTime.Now:HH:mm:ss}] [EVENT] CEID={ceid}");
+                while (EventLog.Count > 200) EventLog.RemoveAt(0);
             });
         }
         return new SecsMessage(6, 12, false) { SecsItem = B(0) };
@@ -257,8 +257,8 @@ public partial class HostViewModel : ObservableObject
             var text = msg.SecsItem[1].GetString();
             App.Current.Dispatcher.Invoke(() =>
             {
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] [TERMINAL] {text}");
-                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+                EventLog.Add($"[{DateTime.Now:HH:mm:ss}] [TERMINAL] {text}");
+                while (EventLog.Count > 200) EventLog.RemoveAt(0);
             });
         }
         return new SecsMessage(10, 2, false) { SecsItem = B(0) };
@@ -274,9 +274,9 @@ public partial class HostViewModel : ObservableObject
             App.Current.Dispatcher.Invoke(() =>
             {
                 var ev = $"[CARRIER IN] CarrierID={carrierId} Port={portId} State={state}";
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {ev}");
+                EventLog.Add($"[{DateTime.Now:HH:mm:ss}] {ev}");
                 AddLog(ev, MsgLevel.System);
-                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+                while (EventLog.Count > 200) EventLog.RemoveAt(0);
             });
         }
         return msg.ReplyExpected ? new SecsMessage(14, 10, false) { SecsItem = B(0) } : null;
@@ -291,9 +291,9 @@ public partial class HostViewModel : ObservableObject
             App.Current.Dispatcher.Invoke(() =>
             {
                 var ev = $"[CARRIER OUT] CarrierID={carrierId} Port={portId}";
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {ev}");
+                EventLog.Add($"[{DateTime.Now:HH:mm:ss}] {ev}");
                 AddLog(ev, MsgLevel.System);
-                while (EventLog.Count > 200) EventLog.RemoveAt(EventLog.Count - 1);
+                while (EventLog.Count > 200) EventLog.RemoveAt(0);
             });
         }
         return msg.ReplyExpected ? new SecsMessage(14, 12, false) { SecsItem = B(0) } : null;
@@ -688,9 +688,9 @@ public partial class HostViewModel : ObservableObject
     private void AddLog(string message, MsgLevel level = MsgLevel.System)
     {
         var entry = new LogEntry(DateTime.Now, message, level);
-        MessageLog.Insert(0, entry);
+        MessageLog.Add(entry);                         // 末尾追記 (上=古い / 下=新しい)
         while (MessageLog.Count > MaxLogLines)
-            MessageLog.RemoveAt(MessageLog.Count - 1);
+            MessageLog.RemoveAt(0);                     // 上限超過は先頭(古い)から削除
     }
 
     [RelayCommand] private void ClearLog()      => MessageLog.Clear();
