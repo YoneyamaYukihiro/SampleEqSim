@@ -9,6 +9,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>SampleEqSim.Equipment</RootNamespace>
     <StartupObject>SampleEqSim.Equipment.App</StartupObject>
+    <ApplicationIcon>equipment.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SampleEqSim.Core\SampleEqSim.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="equipment.ico" />
   </ItemGroup>
 
   <ItemGroup>

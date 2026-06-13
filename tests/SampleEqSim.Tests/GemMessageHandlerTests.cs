@@ -26,8 +26,10 @@ public class GemMessageHandlerTests
             .Setup(m => m.SendAsync(It.IsAny<SecsMessage>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((SecsMessage?)null!);
 
+        // ISecsConnection は internal メンバを持ちモック不可。テストでは null を渡す。
         _model = new GemEquipmentModel(
             secsGemMock.Object,
+            null,
             NullLogger<GemEquipmentModel>.Instance);
     }
 

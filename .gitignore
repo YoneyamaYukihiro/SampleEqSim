@@ -1,6 +1,8 @@
 ## .NET
 bin/
 obj/
+[Bb]in/
+[Oo]bj/
 *.user
 *.suo
 .vs/
@@ -8,6 +10,10 @@ obj/
 ## NuGet
 *.nupkg
 packages/
+
+## ローカル .NET / NuGet (このリポジトリ固有のローカルツール展開先)
+.dotnet/
+.nuget/
 
 ## Build results
 [Dd]ebug/
@@ -18,3 +24,5 @@ build/
 
 ## Logs
 *.log
+*-diag.log
+startup-error.log

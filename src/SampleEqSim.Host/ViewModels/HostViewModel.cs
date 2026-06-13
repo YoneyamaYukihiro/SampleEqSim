@@ -104,7 +104,7 @@ public partial class HostViewModel : ObservableObject
         if (msg.ReplyExpected && reply != null)
         {
             App.Current.Dispatcher.Invoke(() =>
-                AddLog($"SND >> S{reply.S}F{reply.F} ", MsgLevel.Send));
+                AddLog($"SND >> S{reply.S}F{reply.F} {reply.Name}", MsgLevel.Send));
             await e.TryReplyAsync(reply);
         }
     }
@@ -274,15 +274,15 @@ public partial class HostViewModel : ObservableObject
 
         var msg = new SecsMessage(1, 3, true)
         {
-            SecsItem = L(ids.Select(id => (Item)U4(id)))
+            Name = "S1F3", SecsItem = L(ids.Select(id => (Item)U4(id)))
         };
 
         await SendAndLog(msg, reply =>
         {
             if (reply?.SecsItem != null)
             {
-                var lines = Items(reply.SecsItem)
-                    .Select((item, i) => $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = [{item.Format}]")
+                var lines = reply.SecsItem.Items
+                    .Select((item, i) => $"SV[{(i < ids.Count ? ids[i].ToString() : "?")}] = {FormatItem(item)}")
                     .ToList();
                 SvDataResult = string.Join("\n", lines);
             }
@@ -317,7 +317,7 @@ public partial class HostViewModel : ObservableObject
         await SendAndLog(
             new SecsMessage(2, 41, true)
             {
-                SecsItem = L(A(HostCommandText.ToUpperInvariant()), L())
+                Name = "S2F41", SecsItem = L(A(HostCommandText.ToUpperInvariant()), L())
             },
             reply =>
             {
@@ -337,7 +337,7 @@ public partial class HostViewModel : ObservableObject
         await SendAndLog(
             new SecsMessage(2, 33, true)
             {
-                SecsItem = L(
+                Name = "S2F33", SecsItem = L(
                     U4(1),
                     L(L(U4(1u), L(U4(101u), U4(102u), U4(103u)))))
             },
@@ -358,7 +358,7 @@ public partial class HostViewModel : ObservableObject
         await SendAndLog(
             new SecsMessage(2, 35, true)
             {
-                SecsItem = L(
+                Name = "S2F35", SecsItem = L(
                     U4(1),
                     L(
                         L(U4(101u), L(U4(1u))),
@@ -380,7 +380,7 @@ public partial class HostViewModel : ObservableObject
         await SendAndLog(
             new SecsMessage(2, 37, true)
             {
-                SecsItem = L(Boolean(true), L())
+                Name = "S2F37", SecsItem = L(Boolean(true), L())
             },
             reply =>
             {
@@ -550,6 +550,27 @@ public partial class HostViewModel : ObservableObject
             AddLog($"[ERR] {ex.Message}", MsgLevel.Error);
         }
     }
+
+    // Item 値の表示用整形 (Secs4Net.Sml の ToSml() は別パッケージのため自前で簡易整形)
+    private static string FormatItem(Item item) => item.Format switch
+    {
+        SecsFormat.List    => $"<L[{item.Count}]>",
+        SecsFormat.ASCII
+        or SecsFormat.JIS8 => item.GetString(),
+        SecsFormat.Boolean => item.Count > 0 ? item.FirstValue<bool>().ToString()   : "",
+        SecsFormat.Binary  => item.Count > 0 ? item.FirstValue<byte>().ToString()   : "",
+        SecsFormat.U1      => item.Count > 0 ? item.FirstValue<byte>().ToString()   : "",
+        SecsFormat.U2      => item.Count > 0 ? item.FirstValue<ushort>().ToString() : "",
+        SecsFormat.U4      => item.Count > 0 ? item.FirstValue<uint>().ToString()   : "",
+        SecsFormat.U8      => item.Count > 0 ? item.FirstValue<ulong>().ToString()  : "",
+        SecsFormat.I1      => item.Count > 0 ? item.FirstValue<sbyte>().ToString()  : "",
+        SecsFormat.I2      => item.Count > 0 ? item.FirstValue<short>().ToString()  : "",
+        SecsFormat.I4      => item.Count > 0 ? item.FirstValue<int>().ToString()    : "",
+        SecsFormat.I8      => item.Count > 0 ? item.FirstValue<long>().ToString()   : "",
+        SecsFormat.F4      => item.Count > 0 ? item.FirstValue<float>().ToString()  : "",
+        SecsFormat.F8      => item.Count > 0 ? item.FirstValue<double>().ToString() : "",
+        _                  => "",
+    };
 
     private void AddLog(string message, MsgLevel level = MsgLevel.System)
     {

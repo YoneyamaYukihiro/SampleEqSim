@@ -11,6 +11,7 @@ namespace SampleEqSim.Host.Services;
 public sealed class HostGemService : IHostedService
 {
     private readonly ISecsGem _secsGem;
+    private readonly ISecsConnection _connection;
     private CancellationTokenSource? _cts;
 
     // ─── 外部公開イベント ─────────────────────────────────────────
@@ -20,13 +21,13 @@ public sealed class HostGemService : IHostedService
     /// <summary>装置からの Primary メッセージ受信 (S5F1, S6F11, S10F1 等)</summary>
     public event Func<PrimaryMessageWrapper, Task>? PrimaryMessageReceived;
 
-    public HostGemService(ISecsGem secsGem)
+    public HostGemService(ISecsGem secsGem, ISecsConnection connection)
     {
         _secsGem = secsGem;
+        _connection = connection;
 
-        // ISecsConnection にキャストして接続状態変化を購読
-        if (secsGem is ISecsConnection connection)
-            connection.ConnectionChanged += OnConnectionChanged;
+        // 接続状態変化を購読 (ISecsConnection は ISecsGem とは別オブジェクト)
+        _connection.ConnectionChanged += OnConnectionChanged;
     }
 
     private void OnConnectionChanged(object? sender, ConnectionState state)
@@ -44,6 +45,10 @@ public sealed class HostGemService : IHostedService
     {
         try
         {
+            // HSMS 接続を開始 (Active: 装置へ接続を試行)。
+            // これを呼ばないと接続状態機械が動かず、装置へ接続しに行かない。
+            _connection.Start(ct);
+
             await foreach (var e in _secsGem.GetPrimaryMessageAsync(ct))
             {
                 if (PrimaryMessageReceived != null)
