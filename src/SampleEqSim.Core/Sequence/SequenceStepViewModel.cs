@@ -1,10 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace SampleEqSim.Host.ViewModels;
+namespace SampleEqSim.Core.Sequence;
 
 /// <summary>
 /// シーケンス監視の1ステップ表示。状態を LED 色で示す。
 /// LedGray=未到達 / LedYellow=次に期待 / LedGreen=受信済 / LedRed=スキップ・逸脱。
+/// Equipment / Host で共通利用する。
 /// </summary>
 public partial class SequenceStepViewModel : ObservableObject
 {

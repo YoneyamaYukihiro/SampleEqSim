@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SampleEqSim.Core;
 using SampleEqSim.Core.Config;
 using SampleEqSim.Host.Services;
 using SampleEqSim.Host.ViewModels;

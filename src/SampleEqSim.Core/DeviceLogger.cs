@@ -1,12 +1,13 @@
 using Secs4Net;
 using Microsoft.Extensions.Logging;
 
-namespace SampleEqSim.Host;
+namespace SampleEqSim.Core;
 
 /// <summary>
-/// secs4net が要求する ISecsGemLogger の実装
+/// secs4net が要求する ISecsGemLogger の実装。
+/// Equipment / Host で共通利用する (AddSecs4Net&lt;DeviceLogger&gt; の型引数)。
 /// </summary>
-internal sealed class DeviceLogger : ISecsGemLogger
+public sealed class DeviceLogger : ISecsGemLogger
 {
     private readonly ILogger<DeviceLogger> _logger;
 

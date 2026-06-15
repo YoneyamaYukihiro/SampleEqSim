@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Secs4Net;
+using SampleEqSim.Core;
 using SampleEqSim.Core.Config;
 using SampleEqSim.Core.Gem;
 using SampleEqSim.Equipment.ViewModels;
